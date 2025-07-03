@@ -1,0 +1,31 @@
+{
+  "development": {
+    "username": "postgres",
+    "password": "0000",
+    "database": "time_tracker_dev",
+    "host": "localhost",
+    "port": 5433,
+    "dialect": "postgres",
+    "logging": true
+  },
+  "test": {
+    "username": "postgres",
+    "password": "password",
+    "database": "time_tracker_test",
+    "host": "localhost",
+    "port": 5432,
+    "dialect": "postgres",
+    "logging": false
+  },
+  "production": {
+    "use_env_variable": "DATABASE_URL",
+    "dialect": "postgres",
+    "logging": false,
+    "dialectOptions": {
+      "ssl": {
+        "require": true,
+        "rejectUnauthorized": false
+      }
+    }
+  }
+}
