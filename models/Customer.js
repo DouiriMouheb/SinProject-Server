@@ -34,6 +34,7 @@ module.exports = (sequelize, DataTypes) => {
       isActive: {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
+        field: "is_active", // Map to snake_case column in DB
       },
     },
     {

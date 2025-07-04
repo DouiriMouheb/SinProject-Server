@@ -125,6 +125,17 @@ const schemas = {
     budget: Joi.number().min(0),
   }),
 
+  updateProject: Joi.object({
+    name: Joi.string().trim().min(2).max(200),
+    description: Joi.string().trim().max(1000),
+
+    startDate: Joi.date(),
+    endDate: Joi.date().greater(Joi.ref("startDate")).messages({
+      "date.greater": "End date must be after start date",
+    }),
+    budget: Joi.number().min(0),
+  }),
+
   // UUID param validation
   uuidParam: Joi.object({
     id: commonFields.uuid.required(),
@@ -133,6 +144,11 @@ const schemas = {
   // Process ID param validation
   processIdParam: Joi.object({
     processId: commonFields.uuid.required(),
+  }),
+
+  // User ID param validation
+  userIdParam: Joi.object({
+    userId: commonFields.uuid.required(),
   }),
   // Process schemas
   createProcess: Joi.object({

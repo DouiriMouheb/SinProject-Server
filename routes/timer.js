@@ -6,9 +6,10 @@ const {
   Activity,
   Customer,
   Process,
+  User,
 } = require("../models");
 const { authenticate } = require("../middleware/auth");
-const { requireUser } = require("../middleware/rbac");
+const { requireUser, requireManager } = require("../middleware/rbac");
 const { validate, schemas } = require("../middleware/validation");
 const { catchAsync } = require("../middleware/errorHandler");
 const logger = require("../utils/logger");
@@ -603,6 +604,304 @@ router.delete(
     res.json({
       success: true,
       message: "Time entry deleted successfully",
+    });
+  })
+);
+
+/**
+ * @route   GET /api/timer/entries/user/:userId
+ * @desc    Get time entries for specific user (Admin/Manager only)
+ * @access  Private (Admin/Manager)
+ */
+router.get(
+  "/entries/user/:userId",
+  requireManager,
+  validate(schemas.userIdParam, "params"),
+  catchAsync(async (req, res) => {
+    const {
+      page = 1,
+      limit = 100, // Higher default limit for reports
+      status = "completed",
+      startDate,
+      endDate,
+      workProjectId,
+      activityId,
+      customerId,
+      search,
+      sortBy = "startTime",
+      sortOrder = "desc",
+    } = req.query;
+
+    const userId = req.params.userId;
+    const offset = (page - 1) * limit;
+
+    const where = { userId };
+
+    // Completion filter
+    if (status && status !== "all") {
+      if (status === "completed") {
+        where.endTime = { [Op.ne]: null };
+      } else if (status === "active") {
+        where.endTime = null;
+      }
+    }
+
+    // Date range filter
+    if (startDate || endDate) {
+      where.startTime = {};
+      if (startDate) where.startTime[Op.gte] = new Date(startDate);
+      if (endDate)
+        where.startTime[Op.lte] = new Date(endDate + "T23:59:59.999Z");
+    }
+
+    // Project filter
+    if (workProjectId) {
+      where.workProjectId = workProjectId;
+    }
+
+    // Activity filter
+    if (activityId) {
+      where.activityId = activityId;
+    }
+
+    // Search filter
+    if (search) {
+      where[Op.or] = [
+        { taskName: { [Op.iLike]: `%${search}%` } },
+        { description: { [Op.iLike]: `%${search}%` } },
+      ];
+    }
+
+    // Include conditions
+    const includeConditions = [
+      {
+        model: User,
+        as: "user",
+        attributes: ["name", "email"],
+      },
+      {
+        model: WorkProject,
+        as: "workProject",
+        attributes: ["name"],
+        include: [
+          {
+            model: Customer,
+            as: "customer",
+            attributes: ["name"],
+            ...(customerId && { where: { id: customerId } }),
+          },
+        ],
+        ...(customerId && { required: true }),
+      },
+      {
+        model: Activity,
+        as: "activity",
+        attributes: ["name"],
+      },
+    ];
+
+    // Sorting
+    const orderClause = [];
+    if (sortBy === "workProject") {
+      orderClause.push([
+        { model: WorkProject, as: "workProject" },
+        "name",
+        sortOrder.toUpperCase(),
+      ]);
+    } else if (sortBy === "customer") {
+      orderClause.push([
+        { model: WorkProject, as: "workProject" },
+        { model: Customer, as: "customer" },
+        "name",
+        sortOrder.toUpperCase(),
+      ]);
+    } else if (sortBy === "activity") {
+      orderClause.push([
+        { model: Activity, as: "activity" },
+        "name",
+        sortOrder.toUpperCase(),
+      ]);
+    } else {
+      orderClause.push([sortBy, sortOrder.toUpperCase()]);
+    }
+
+    const { rows: entries, count } = await TimeEntry.findAndCountAll({
+      where,
+      include: includeConditions,
+      order: orderClause,
+      limit: parseInt(limit),
+      offset,
+      distinct: true,
+    });
+
+    logger.info("Time entries retrieved for user", {
+      requestingUserId: req.user.id,
+      targetUserId: userId,
+      count: entries.length,
+    });
+
+    const pagination = {
+      currentPage: parseInt(page),
+      totalPages: Math.ceil(count / limit),
+      totalEntries: count,
+      limit: parseInt(limit),
+    };
+
+    res.json({
+      success: true,
+      data: {
+        entries,
+        pagination,
+      },
+    });
+  })
+);
+
+/**
+ * @route   GET /api/timer/users/:userId/entries
+ * @desc    Get time entries for specific user (Admin/Manager only) - Alternative endpoint
+ * @access  Private (Admin/Manager)
+ */
+router.get(
+  "/users/:userId/entries",
+  requireManager,
+  validate(schemas.userIdParam, "params"),
+  catchAsync(async (req, res) => {
+    const {
+      page = 1,
+      limit = 100, // Higher default limit for reports
+      status = "completed",
+      startDate,
+      endDate,
+      workProjectId,
+      activityId,
+      customerId,
+      search,
+      sortBy = "startTime",
+      sortOrder = "desc",
+    } = req.query;
+
+    const userId = req.params.userId;
+    const offset = (page - 1) * limit;
+
+    const where = { userId };
+
+    // Completion filter
+    if (status && status !== "all") {
+      if (status === "completed") {
+        where.endTime = { [Op.ne]: null };
+      } else if (status === "active") {
+        where.endTime = null;
+      }
+    }
+
+    // Date range filter
+    if (startDate || endDate) {
+      where.startTime = {};
+      if (startDate) where.startTime[Op.gte] = new Date(startDate);
+      if (endDate)
+        where.startTime[Op.lte] = new Date(endDate + "T23:59:59.999Z");
+    }
+
+    // Project filter
+    if (workProjectId) {
+      where.workProjectId = workProjectId;
+    }
+
+    // Activity filter
+    if (activityId) {
+      where.activityId = activityId;
+    }
+
+    // Search filter
+    if (search) {
+      where[Op.or] = [
+        { taskName: { [Op.iLike]: `%${search}%` } },
+        { description: { [Op.iLike]: `%${search}%` } },
+      ];
+    }
+
+    // Include conditions
+    const includeConditions = [
+      {
+        model: User,
+        as: "user",
+        attributes: ["name", "email"],
+      },
+      {
+        model: WorkProject,
+        as: "workProject",
+        attributes: ["name"],
+        include: [
+          {
+            model: Customer,
+            as: "customer",
+            attributes: ["name"],
+            ...(customerId && { where: { id: customerId } }),
+          },
+        ],
+        ...(customerId && { required: true }),
+      },
+      {
+        model: Activity,
+        as: "activity",
+        attributes: ["name"],
+      },
+    ];
+
+    // Sorting
+    const orderClause = [];
+    if (sortBy === "workProject") {
+      orderClause.push([
+        { model: WorkProject, as: "workProject" },
+        "name",
+        sortOrder.toUpperCase(),
+      ]);
+    } else if (sortBy === "customer") {
+      orderClause.push([
+        { model: WorkProject, as: "workProject" },
+        { model: Customer, as: "customer" },
+        "name",
+        sortOrder.toUpperCase(),
+      ]);
+    } else if (sortBy === "activity") {
+      orderClause.push([
+        { model: Activity, as: "activity" },
+        "name",
+        sortOrder.toUpperCase(),
+      ]);
+    } else {
+      orderClause.push([sortBy, sortOrder.toUpperCase()]);
+    }
+
+    const { rows: entries, count } = await TimeEntry.findAndCountAll({
+      where,
+      include: includeConditions,
+      order: orderClause,
+      limit: parseInt(limit),
+      offset,
+      distinct: true,
+    });
+
+    logger.info("Time entries retrieved for user (alternative endpoint)", {
+      requestingUserId: req.user.id,
+      targetUserId: userId,
+      count: entries.length,
+    });
+
+    const pagination = {
+      currentPage: parseInt(page),
+      totalPages: Math.ceil(count / limit),
+      totalEntries: count,
+      limit: parseInt(limit),
+    };
+
+    res.json({
+      success: true,
+      data: {
+        entries,
+        pagination,
+      },
     });
   })
 );

@@ -3,6 +3,7 @@ const logger = require("../utils/logger");
 
 const ROLES = {
   USER: "user",
+  MANAGER: "manager",
   ADMIN: "admin",
 };
 
@@ -21,8 +22,18 @@ const authorize = (requiredRole) => {
 
       const userRole = req.user.role;
 
-      // Check if user has required role
-      if (requiredRole === ROLES.ADMIN && userRole !== ROLES.ADMIN) {
+      // Define role hierarchy: admin > manager > user
+      const roleHierarchy = {
+        admin: 3,
+        manager: 2,
+        user: 1,
+      };
+
+      const userRoleLevel = roleHierarchy[userRole] || 0;
+      const requiredRoleLevel = roleHierarchy[requiredRole] || 0;
+
+      // Check if user has required role or higher
+      if (userRoleLevel < requiredRoleLevel) {
         logger.warn("Access denied", {
           userId: req.user.id,
           userRole,
@@ -58,10 +69,12 @@ const requireUser = (req, res, next) => {
 };
 
 const requireAdmin = authorize(ROLES.ADMIN);
+const requireManager = authorize(ROLES.MANAGER);
 
 module.exports = {
   ROLES,
   authorize,
   requireUser,
   requireAdmin,
+  requireManager,
 };

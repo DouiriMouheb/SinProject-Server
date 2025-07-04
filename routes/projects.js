@@ -414,4 +414,131 @@ router.put(
   })
 );
 
+/**
+ * @route   GET /api/projects/:id
+ * @desc    Get project by ID
+ * @access  Private
+ */
+router.get(
+  "/:id",
+  validate(schemas.uuidParam, "params"),
+  catchAsync(async (req, res) => {
+    const project = await WorkProject.findByPk(req.params.id, {
+      include: [
+        {
+          model: Customer,
+          as: "customer",
+          attributes: ["id", "name"],
+        },
+      ],
+    });
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: "Project not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: { project },
+    });
+  })
+);
+
+/**
+ * @route   PUT /api/projects/:id
+ * @desc    Update project
+ * @access  Private
+ */
+router.put(
+  "/:id",
+  validate(schemas.uuidParam, "params"),
+  validate(schemas.updateProject),
+  catchAsync(async (req, res) => {
+    const project = await WorkProject.findByPk(req.params.id);
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: "Project not found",
+      });
+    }
+
+    await project.update(req.body);
+
+    // Reload with customer data
+    await project.reload({
+      include: [
+        {
+          model: Customer,
+          as: "customer",
+          attributes: ["id", "name"],
+        },
+      ],
+    });
+
+    logger.info("Work project updated", {
+      userId: req.user.id,
+      projectId: project.id,
+      projectName: project.name,
+    });
+
+    res.json({
+      success: true,
+      message: "Project updated successfully",
+      data: { project },
+    });
+  })
+);
+
+/**
+ * @route   DELETE /api/projects/:id
+ * @desc    Delete project
+ * @access  Private
+ */
+router.delete(
+  "/:id",
+  validate(schemas.uuidParam, "params"),
+  catchAsync(async (req, res) => {
+    const project = await WorkProject.findByPk(req.params.id, {
+      include: [
+        {
+          model: TimeEntry,
+          as: "timeEntries",
+        },
+      ],
+    });
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: "Project not found",
+      });
+    }
+
+    // Check if project has time entries
+    if (project.timeEntries && project.timeEntries.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot delete project with existing time entries",
+      });
+    }
+
+    await project.destroy();
+
+    logger.info("Work project deleted", {
+      userId: req.user.id,
+      projectId: project.id,
+      projectName: project.name,
+    });
+
+    res.json({
+      success: true,
+      message: "Project deleted successfully",
+    });
+  })
+);
+
 module.exports = router;

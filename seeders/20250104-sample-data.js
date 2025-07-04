@@ -1,9 +1,38 @@
 "use strict";
 
 const { v4: uuidv4 } = require("uuid");
+const bcrypt = require("bcryptjs");
 
 module.exports = {
   async up(queryInterface, Sequelize) {
+    // Create users first
+    const hashedPassword = await bcrypt.hash("password123", 10);
+
+    const users = [
+      {
+        id: uuidv4(),
+        name: "Admin User",
+        email: "admin@example.com",
+        password: hashedPassword,
+        role: "admin",
+        is_active: true,
+        created_at: new Date(),
+        updated_at: new Date(),
+      },
+      {
+        id: uuidv4(),
+        name: "Regular User",
+        email: "user@example.com",
+        password: hashedPassword,
+        role: "user",
+        is_active: true,
+        created_at: new Date(),
+        updated_at: new Date(),
+      },
+    ];
+
+    await queryInterface.bulkInsert("users", users);
+
     // Create customers
     const customers = [
       {
@@ -192,5 +221,6 @@ module.exports = {
     await queryInterface.bulkDelete("processes", null, {});
     await queryInterface.bulkDelete("work_projects", null, {});
     await queryInterface.bulkDelete("customers", null, {});
+    await queryInterface.bulkDelete("users", null, {});
   },
 };
