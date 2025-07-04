@@ -1,4 +1,4 @@
-// routes/timer.js
+// routes/timer.js - FIXED VERSION with missing endpoints
 const express = require("express");
 const {
   TimeEntry,
@@ -91,6 +91,13 @@ router.post(
           model: WorkProject,
           as: "workProject",
           attributes: ["name"],
+          include: [
+            {
+              model: Customer,
+              as: "customer",
+              attributes: ["name"],
+            },
+          ],
         },
         {
           model: Activity,
@@ -110,6 +117,109 @@ router.post(
     res.status(201).json({
       success: true,
       message: "Timer started successfully",
+      data: { timeEntry },
+    });
+  })
+);
+
+/**
+ * @route   POST /api/timer/entries
+ * @desc    Create manual time entry - MISSING ENDPOINT ADDED
+ * @access  Private
+ */
+router.post(
+  "/entries",
+  validate(schemas.createManualTimeEntry), // New validation schema needed
+  catchAsync(async (req, res) => {
+    const {
+      workProjectId,
+      activityId,
+      taskName,
+      description,
+      startTime,
+      endTime,
+      durationMinutes,
+    } = req.body;
+    const userId = req.user.id;
+
+    // Verify project and activity exist
+    const project = await WorkProject.findByPk(workProjectId);
+    const activity = await Activity.findByPk(activityId);
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: "Work project not found",
+      });
+    }
+
+    if (!activity) {
+      return res.status(404).json({
+        success: false,
+        message: "Activity not found",
+      });
+    }
+
+    // Validate time entries
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+
+    if (end <= start) {
+      return res.status(400).json({
+        success: false,
+        message: "End time must be after start time",
+      });
+    }
+
+    // Create manual time entry
+    const timeEntry = await TimeEntry.create({
+      userId,
+      workProjectId,
+      activityId,
+      taskName,
+      description,
+      startTime: start,
+      endTime: end,
+      durationMinutes:
+        durationMinutes || Math.floor((end - start) / (1000 * 60)),
+      status: "completed",
+      isManual: true,
+    });
+
+    // Load related data
+    await timeEntry.reload({
+      include: [
+        {
+          model: WorkProject,
+          as: "workProject",
+          attributes: ["name"],
+          include: [
+            {
+              model: Customer,
+              as: "customer",
+              attributes: ["name"],
+            },
+          ],
+        },
+        {
+          model: Activity,
+          as: "activity",
+          attributes: ["name"],
+        },
+      ],
+    });
+
+    logger.info("Manual time entry created", {
+      userId,
+      timeEntryId: timeEntry.id,
+      projectName: timeEntry.workProject.name,
+      activityName: timeEntry.activity.name,
+      duration: timeEntry.durationMinutes,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Manual time entry created successfully",
       data: { timeEntry },
     });
   })
@@ -290,6 +400,12 @@ router.get(
       status = "completed",
       startDate,
       endDate,
+      workProjectId,
+      activityId,
+      customerId,
+      search,
+      sortBy = "startTime",
+      sortOrder = "desc",
     } = req.query;
 
     const userId = req.user.id;
@@ -297,40 +413,84 @@ router.get(
 
     const where = { userId };
 
+    // Status filter
     if (status && status !== "all") {
       where.status = status;
     }
 
+    // Date range filter
     if (startDate || endDate) {
       where.startTime = {};
       if (startDate) where.startTime[Op.gte] = new Date(startDate);
-      if (endDate) where.startTime[Op.lte] = new Date(endDate);
+      if (endDate)
+        where.startTime[Op.lte] = new Date(endDate + "T23:59:59.999Z");
+    }
+
+    // Project filter
+    if (workProjectId) {
+      where.workProjectId = workProjectId;
+    }
+
+    // Activity filter
+    if (activityId) {
+      where.activityId = activityId;
+    }
+
+    // Search filter
+    if (search) {
+      where[Op.or] = [
+        { taskName: { [Op.iLike]: `%${search}%` } },
+        { description: { [Op.iLike]: `%${search}%` } },
+      ];
+    }
+
+    // Include conditions for customer filter
+    const includeConditions = [
+      {
+        model: WorkProject,
+        as: "workProject",
+        attributes: ["name"],
+        include: [
+          {
+            model: Customer,
+            as: "customer",
+            attributes: ["name"],
+            ...(customerId && { where: { id: customerId } }),
+          },
+        ],
+        ...(customerId && { required: true }),
+      },
+      {
+        model: Activity,
+        as: "activity",
+        attributes: ["name"],
+      },
+    ];
+
+    // Sorting
+    const orderClause = [];
+    if (sortBy === "workProject") {
+      orderClause.push([
+        { model: WorkProject, as: "workProject" },
+        "name",
+        sortOrder.toUpperCase(),
+      ]);
+    } else if (sortBy === "activity") {
+      orderClause.push([
+        { model: Activity, as: "activity" },
+        "name",
+        sortOrder.toUpperCase(),
+      ]);
+    } else {
+      orderClause.push([sortBy, sortOrder.toUpperCase()]);
     }
 
     const { count, rows: timeEntries } = await TimeEntry.findAndCountAll({
       where,
-      include: [
-        {
-          model: WorkProject,
-          as: "workProject",
-          attributes: ["name"],
-          include: [
-            {
-              model: Customer,
-              as: "customer",
-              attributes: ["name"],
-            },
-          ],
-        },
-        {
-          model: Activity,
-          as: "activity",
-          attributes: ["name"],
-        },
-      ],
+      include: includeConditions,
       limit: parseInt(limit),
       offset: parseInt(offset),
-      order: [["startTime", "DESC"]],
+      order: orderClause,
     });
 
     const totalPages = Math.ceil(count / limit);
@@ -385,6 +545,29 @@ router.put(
 
     await timeEntry.update(req.body);
 
+    // Reload with associations
+    await timeEntry.reload({
+      include: [
+        {
+          model: WorkProject,
+          as: "workProject",
+          attributes: ["name"],
+          include: [
+            {
+              model: Customer,
+              as: "customer",
+              attributes: ["name"],
+            },
+          ],
+        },
+        {
+          model: Activity,
+          as: "activity",
+          attributes: ["name"],
+        },
+      ],
+    });
+
     logger.info("Time entry updated", {
       userId,
       timeEntryId: id,
@@ -395,6 +578,59 @@ router.put(
       success: true,
       message: "Time entry updated successfully",
       data: { timeEntry },
+    });
+  })
+);
+
+/**
+ * @route   DELETE /api/timer/entries/:id
+ * @desc    Delete time entry - MISSING ENDPOINT ADDED
+ * @access  Private
+ */
+router.delete(
+  "/entries/:id",
+  validate(schemas.uuidParam, "params"),
+  catchAsync(async (req, res) => {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const timeEntry = await TimeEntry.findOne({
+      where: { id, userId },
+    });
+
+    if (!timeEntry) {
+      return res.status(404).json({
+        success: false,
+        message: "Time entry not found",
+      });
+    }
+
+    // Only allow deleting completed entries
+    if (timeEntry.status !== "completed") {
+      return res.status(400).json({
+        success: false,
+        message: "Only completed time entries can be deleted",
+      });
+    }
+
+    // Store info for logging before deletion
+    const entryInfo = {
+      taskName: timeEntry.taskName,
+      durationMinutes: timeEntry.durationMinutes,
+    };
+
+    await timeEntry.destroy();
+
+    logger.info("Time entry deleted", {
+      userId,
+      timeEntryId: id,
+      taskName: entryInfo.taskName,
+      duration: entryInfo.durationMinutes,
+    });
+
+    res.json({
+      success: true,
+      message: "Time entry deleted successfully",
     });
   })
 );

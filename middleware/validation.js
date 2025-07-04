@@ -1,4 +1,4 @@
-// middleware/validation.js
+// middleware/validation.js - UPDATED with manual time entry schema
 const Joi = require("joi");
 const logger = require("../utils/logger");
 
@@ -66,13 +66,62 @@ const schemas = {
     description: Joi.string().trim().max(1000),
   }),
 
+  // NEW: Manual time entry schema
+  createManualTimeEntry: Joi.object({
+    workProjectId: commonFields.uuid.required(),
+    activityId: commonFields.uuid.required(),
+    taskName: Joi.string().trim().min(2).max(300).required(),
+    description: Joi.string().trim().max(1000),
+    startTime: Joi.date().required().messages({
+      "date.base": "Start time must be a valid date",
+      "any.required": "Start time is required",
+    }),
+    endTime: Joi.date().required().greater(Joi.ref("startTime")).messages({
+      "date.base": "End time must be a valid date",
+      "any.required": "End time is required",
+      "date.greater": "End time must be after start time",
+    }),
+    durationMinutes: Joi.number().min(1).max(1440).messages({
+      "number.min": "Duration must be at least 1 minute",
+      "number.max": "Duration cannot exceed 24 hours (1440 minutes)",
+    }),
+    isManual: Joi.boolean().default(true),
+  }).custom((value, helpers) => {
+    // Additional validation: check if calculated duration matches provided duration
+    if (value.startTime && value.endTime && value.durationMinutes) {
+      const calculatedDuration = Math.floor(
+        (new Date(value.endTime) - new Date(value.startTime)) / (1000 * 60)
+      );
+      const tolerance = 1; // Allow 1 minute tolerance
+
+      if (Math.abs(calculatedDuration - value.durationMinutes) > tolerance) {
+        return helpers.message(
+          "Duration does not match the time difference between start and end time"
+        );
+      }
+    }
+    return value;
+  }),
+
   updateTimeEntry: Joi.object({
     taskName: Joi.string().trim().min(2).max(300),
     description: Joi.string().trim().max(1000),
     startTime: Joi.date(),
     endTime: Joi.date(),
     durationMinutes: Joi.number().min(0),
-  }).min(1),
+  })
+    .min(1)
+    .custom((value, helpers) => {
+      // Validate that endTime is after startTime if both are provided
+      if (
+        value.startTime &&
+        value.endTime &&
+        new Date(value.endTime) <= new Date(value.startTime)
+      ) {
+        return helpers.message("End time must be after start time");
+      }
+      return value;
+    }),
 
   // Customer schemas
   createCustomer: Joi.object({
@@ -92,14 +141,45 @@ const schemas = {
       .valid("active", "on_hold", "completed", "cancelled")
       .default("active"),
     startDate: Joi.date(),
-    endDate: Joi.date(),
+    endDate: Joi.date().greater(Joi.ref("startDate")).messages({
+      "date.greater": "End date must be after start date",
+    }),
     budget: Joi.number().min(0),
   }),
 
   // UUID param validation
   uuidParam: Joi.object({
-    id: commonFields.uuid.required(),
+    processId: commonFields.uuid.required(),
   }),
+  // Process schemas
+  createProcess: Joi.object({
+    name: Joi.string().trim().min(2).max(200).required(),
+    description: Joi.string().trim().max(1000),
+    category: Joi.string().trim().max(100),
+    isActive: Joi.boolean().default(true),
+  }),
+
+  updateProcess: Joi.object({
+    name: Joi.string().trim().min(2).max(200),
+    description: Joi.string().trim().max(1000),
+    category: Joi.string().trim().max(100),
+    isActive: Joi.boolean(),
+  }).min(1),
+
+  // Activity schemas
+  createActivity: Joi.object({
+    name: Joi.string().trim().min(2).max(200).required(),
+    description: Joi.string().trim().max(1000),
+    estimatedMinutes: Joi.number().min(0),
+    isActive: Joi.boolean().default(true),
+  }),
+
+  updateActivity: Joi.object({
+    name: Joi.string().trim().min(2).max(200),
+    description: Joi.string().trim().max(1000),
+    estimatedMinutes: Joi.number().min(0),
+    isActive: Joi.boolean(),
+  }).min(1),
 };
 
 /**

@@ -145,5 +145,264 @@ router.get(
     });
   })
 );
+/**
+ * @route   POST /api/projects/processes
+ * @desc    Create new process
+ * @access  Private
+ */
+router.post(
+  "/processes",
+  validate(schemas.createProcess),
+  catchAsync(async (req, res) => {
+    const process = await Process.create(req.body);
+
+    logger.info("Process created", {
+      userId: req.user.id,
+      processId: process.id,
+      processName: process.name,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Process created successfully",
+      data: { process },
+    });
+  })
+);
+
+/**
+ * @route   GET /api/projects/processes
+ * @desc    Get all processes
+ * @access  Private
+ */
+router.get(
+  "/processes",
+  catchAsync(async (req, res) => {
+    const { page = 1, limit = 50, search = "", isActive = "true" } = req.query;
+    const offset = (page - 1) * limit;
+
+    const where = {};
+    if (search) {
+      where.name = { [Op.iLike]: `%${search}%` };
+    }
+    if (isActive !== "all") {
+      where.isActive = isActive === "true";
+    }
+
+    const { count, rows: processes } = await Process.findAndCountAll({
+      where,
+      include: [
+        {
+          model: Activity,
+          as: "activities",
+          attributes: [
+            "id",
+            "name",
+            "description",
+            "estimatedMinutes",
+            "isActive",
+          ],
+          where: { isActive: true },
+          required: false,
+        },
+      ],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      order: [["name", "ASC"]],
+    });
+
+    res.json({
+      success: true,
+      data: {
+        processes,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(count / limit),
+          totalProcesses: count,
+        },
+      },
+    });
+  })
+);
+
+/**
+ * @route   PUT /api/projects/processes/:id
+ * @desc    Update process
+ * @access  Private
+ */
+router.put(
+  "/processes/:id",
+  validate(schemas.uuidParam, "params"),
+  validate(schemas.updateProcess),
+  catchAsync(async (req, res) => {
+    const { id } = req.params;
+
+    const process = await Process.findByPk(id);
+    if (!process) {
+      return res.status(404).json({
+        success: false,
+        message: "Process not found",
+      });
+    }
+
+    await process.update(req.body);
+
+    logger.info("Process updated", {
+      userId: req.user.id,
+      processId: id,
+      updatedFields: Object.keys(req.body),
+    });
+
+    res.json({
+      success: true,
+      message: "Process updated successfully",
+      data: { process },
+    });
+  })
+);
+
+/**
+ * @route   POST /api/projects/processes/:processId/activities
+ * @desc    Create new activity for a process
+ * @access  Private
+ */
+router.post(
+  "/processes/:processId/activities",
+  validate(schemas.uuidParam, "params"),
+  validate(schemas.createActivity),
+  catchAsync(async (req, res) => {
+    const { processId } = req.params;
+
+    // Verify process exists
+    const process = await Process.findByPk(processId);
+    if (!process) {
+      return res.status(404).json({
+        success: false,
+        message: "Process not found",
+      });
+    }
+
+    const activity = await Activity.create({
+      ...req.body,
+      processId,
+    });
+
+    // Load with process data
+    await activity.reload({
+      include: [
+        {
+          model: Process,
+          as: "process",
+          attributes: ["id", "name"],
+        },
+      ],
+    });
+
+    logger.info("Activity created", {
+      userId: req.user.id,
+      activityId: activity.id,
+      activityName: activity.name,
+      processId,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Activity created successfully",
+      data: { activity },
+    });
+  })
+);
+
+/**
+ * @route   GET /api/projects/activities
+ * @desc    Get all activities
+ * @access  Private
+ */
+router.get(
+  "/activities",
+  catchAsync(async (req, res) => {
+    const {
+      page = 1,
+      limit = 50,
+      search = "",
+      processId = "",
+      isActive = "true",
+    } = req.query;
+    const offset = (page - 1) * limit;
+
+    const where = {};
+    if (search) {
+      where.name = { [Op.iLike]: `%${search}%` };
+    }
+    if (processId) {
+      where.processId = processId;
+    }
+    if (isActive !== "all") {
+      where.isActive = isActive === "true";
+    }
+
+    const { count, rows: activities } = await Activity.findAndCountAll({
+      where,
+      include: [
+        {
+          model: Process,
+          as: "process",
+          attributes: ["id", "name", "category"],
+        },
+      ],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      order: [["name", "ASC"]],
+    });
+
+    res.json({
+      success: true,
+      data: {
+        activities,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(count / limit),
+          totalActivities: count,
+        },
+      },
+    });
+  })
+);
+
+/**
+ * @route   PUT /api/projects/activities/:id
+ * @desc    Update activity
+ * @access  Private
+ */
+router.put(
+  "/activities/:id",
+  validate(schemas.uuidParam, "params"),
+  validate(schemas.updateActivity),
+  catchAsync(async (req, res) => {
+    const { id } = req.params;
+
+    const activity = await Activity.findByPk(id);
+    if (!activity) {
+      return res.status(404).json({
+        success: false,
+        message: "Activity not found",
+      });
+    }
+
+    await activity.update(req.body);
+
+    logger.info("Activity updated", {
+      userId: req.user.id,
+      activityId: id,
+      updatedFields: Object.keys(req.body),
+    });
+
+    res.json({
+      success: true,
+      message: "Activity updated successfully",
+      data: { activity },
+    });
+  })
+);
 
 module.exports = router;
