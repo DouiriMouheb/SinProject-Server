@@ -27,23 +27,6 @@ module.exports = (sequelize, DataTypes) => {
       description: {
         type: DataTypes.TEXT,
       },
-      status: {
-        type: DataTypes.ENUM("active", "on_hold", "completed", "cancelled"),
-        defaultValue: "active",
-      },
-      startDate: {
-        type: DataTypes.DATE,
-      },
-      endDate: {
-        type: DataTypes.DATE,
-      },
-      budget: {
-        type: DataTypes.DECIMAL(10, 2),
-      },
-      isActive: {
-        type: DataTypes.BOOLEAN,
-        defaultValue: true,
-      },
     },
     {
       tableName: "work_projects",

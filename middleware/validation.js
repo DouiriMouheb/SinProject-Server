@@ -81,26 +81,7 @@ const schemas = {
       "any.required": "End time is required",
       "date.greater": "End time must be after start time",
     }),
-    durationMinutes: Joi.number().min(1).max(1440).messages({
-      "number.min": "Duration must be at least 1 minute",
-      "number.max": "Duration cannot exceed 24 hours (1440 minutes)",
-    }),
     isManual: Joi.boolean().default(true),
-  }).custom((value, helpers) => {
-    // Additional validation: check if calculated duration matches provided duration
-    if (value.startTime && value.endTime && value.durationMinutes) {
-      const calculatedDuration = Math.floor(
-        (new Date(value.endTime) - new Date(value.startTime)) / (1000 * 60)
-      );
-      const tolerance = 1; // Allow 1 minute tolerance
-
-      if (Math.abs(calculatedDuration - value.durationMinutes) > tolerance) {
-        return helpers.message(
-          "Duration does not match the time difference between start and end time"
-        );
-      }
-    }
-    return value;
   }),
 
   updateTimeEntry: Joi.object({
@@ -108,7 +89,6 @@ const schemas = {
     description: Joi.string().trim().max(1000),
     startTime: Joi.date(),
     endTime: Joi.date(),
-    durationMinutes: Joi.number().min(0),
   })
     .min(1)
     .custom((value, helpers) => {
@@ -137,9 +117,7 @@ const schemas = {
     customerId: commonFields.uuid.required(),
     name: Joi.string().trim().min(2).max(200).required(),
     description: Joi.string().trim().max(1000),
-    status: Joi.string()
-      .valid("active", "on_hold", "completed", "cancelled")
-      .default("active"),
+
     startDate: Joi.date(),
     endDate: Joi.date().greater(Joi.ref("startDate")).messages({
       "date.greater": "End date must be after start date",
@@ -149,6 +127,11 @@ const schemas = {
 
   // UUID param validation
   uuidParam: Joi.object({
+    id: commonFields.uuid.required(),
+  }),
+
+  // Process ID param validation
+  processIdParam: Joi.object({
     processId: commonFields.uuid.required(),
   }),
   // Process schemas

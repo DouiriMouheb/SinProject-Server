@@ -1,6 +1,13 @@
 // routes/admin.js
 const express = require("express");
-const { User } = require("../models");
+const {
+  User,
+  TimeEntry,
+  WorkProject,
+  Customer,
+  Activity,
+  sequelize,
+} = require("../models");
 const { authenticate } = require("../middleware/auth");
 const { requireAdmin } = require("../middleware/rbac");
 const { validate, schemas } = require("../middleware/validation");
@@ -235,6 +242,124 @@ router.delete(
     res.json({
       success: true,
       message: "User deleted successfully",
+    });
+  })
+);
+// Add this endpoint to routes/admin.js (after the GET /api/admin/users route)
+
+/**
+ * @route   GET /api/admin/users/:id
+ * @desc    Get specific user by ID (Admin only)
+ * @access  Private (Admin)
+ */
+router.get(
+  "/users/:id",
+  validate(schemas.uuidParam, "params"),
+  catchAsync(async (req, res) => {
+    const { id } = req.params;
+
+    const user = await User.findByPk(id, {
+      attributes: { exclude: ["password"] }, // Don't return password
+      include: [
+        {
+          model: TimeEntry,
+          as: "timeEntries",
+          attributes: [
+            "id",
+            "taskName",
+            "startTime",
+            "endTime",
+            "description",
+            "isManual",
+          ],
+          limit: 5, // Show last 5 time entries
+          order: [["startTime", "DESC"]],
+          required: false,
+          include: [
+            {
+              model: WorkProject,
+              as: "workProject",
+              attributes: ["name"],
+              include: [
+                {
+                  model: Customer,
+                  as: "customer",
+                  attributes: ["name"],
+                },
+              ],
+            },
+            {
+              model: Activity,
+              as: "activity",
+              attributes: ["name"],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Calculate user statistics
+    const stats = await TimeEntry.findOne({
+      where: {
+        userId: id,
+        endTime: { [Op.ne]: null }, // Only count completed entries
+      },
+      attributes: [
+        [sequelize.fn("COUNT", sequelize.col("id")), "totalEntries"],
+        [
+          sequelize.fn(
+            "SUM",
+            sequelize.fn(
+              "EXTRACT",
+              sequelize.literal('EPOCH FROM ("end_time" - "start_time")')
+            )
+          ),
+          "totalSeconds",
+        ],
+        [
+          sequelize.fn(
+            "AVG",
+            sequelize.fn(
+              "EXTRACT",
+              sequelize.literal('EPOCH FROM ("end_time" - "start_time")')
+            )
+          ),
+          "avgSeconds",
+        ],
+      ],
+      raw: true,
+    });
+
+    logger.info("User details accessed by admin", {
+      adminUserId: req.user.id,
+      targetUserId: id,
+      targetUserEmail: user.email,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        user,
+        statistics: {
+          totalTimeEntries: parseInt(stats?.totalEntries) || 0,
+          totalMinutesLogged: Math.round(
+            (parseInt(stats?.totalSeconds) || 0) / 60
+          ),
+          averageSessionMinutes: Math.round(
+            (parseFloat(stats?.avgSeconds) || 0) / 60
+          ),
+          totalHoursLogged:
+            Math.round(((parseInt(stats?.totalSeconds) || 0) / 3600) * 100) /
+            100,
+        },
+      },
     });
   })
 );

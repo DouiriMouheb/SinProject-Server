@@ -19,13 +19,6 @@ module.exports = (sequelize, DataTypes) => {
       description: {
         type: DataTypes.TEXT,
       },
-      category: {
-        type: DataTypes.STRING(100),
-      },
-      isActive: {
-        type: DataTypes.BOOLEAN,
-        defaultValue: true,
-      },
     },
     {
       tableName: "processes",

@@ -12,10 +12,25 @@ const config = {
     dialect: "postgres",
     logging: process.env.NODE_ENV === "development" ? console.log : false,
     pool: {
-      max: 10,
-      min: 0,
-      acquire: 30000,
-      idle: 10000,
+      max: 20, // Increased max connections
+      min: 2, // Keep minimum connections alive
+      acquire: 60000, // Increased timeout to 60 seconds
+      idle: 30000, // Increased idle timeout
+      evict: 10000, // Evict idle connections after 10 seconds
+    },
+    dialectOptions: {
+      statement_timeout: 30000, // 30 second query timeout
+      idle_in_transaction_session_timeout: 30000,
+    },
+    retry: {
+      match: [
+        /ETIMEDOUT/,
+        /EHOSTUNREACH/,
+        /ECONNRESET/,
+        /ECONNREFUSED/,
+        /TIMEOUT/,
+      ],
+      max: 3,
     },
     define: {
       timestamps: true,
@@ -52,8 +67,8 @@ const config = {
   // Rate limiting configuration
   rateLimit: {
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
-    authMax: 5, // limit auth endpoints to 5 requests per windowMs
+    max: 1000, // Increased limit for development/testing
+    authMax: 20, // Increased auth endpoint limit
   },
 
   // Pagination defaults

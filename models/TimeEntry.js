@@ -18,7 +18,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       workProjectId: {
         type: DataTypes.UUID,
-        allowNull: false,
+        allowNull: true,
         references: {
           model: "work_projects",
           key: "id",
@@ -26,7 +26,7 @@ module.exports = (sequelize, DataTypes) => {
       },
       activityId: {
         type: DataTypes.UUID,
-        allowNull: false,
+        allowNull: true,
         references: {
           model: "activities",
           key: "id",
@@ -57,17 +57,6 @@ module.exports = (sequelize, DataTypes) => {
           },
         },
       },
-      durationMinutes: {
-        type: DataTypes.INTEGER,
-        defaultValue: 0,
-        validate: {
-          min: 0,
-        },
-      },
-      status: {
-        type: DataTypes.ENUM("active", "paused", "completed"),
-        defaultValue: "active",
-      },
       isManual: {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
@@ -79,48 +68,18 @@ module.exports = (sequelize, DataTypes) => {
     },
     {
       tableName: "time_entries",
-      hooks: {
-        beforeSave: (timeEntry) => {
-          // Calculate duration if endTime is set
-          if (timeEntry.startTime && timeEntry.endTime) {
-            const durationMs =
-              new Date(timeEntry.endTime) - new Date(timeEntry.startTime);
-            timeEntry.durationMinutes = Math.floor(durationMs / (1000 * 60));
-          }
-        },
-      },
     }
   );
 
   // Instance methods
-  TimeEntry.prototype.start = function () {
-    this.status = "active";
-    this.startTime = new Date();
-    return this.save();
-  };
-
-  TimeEntry.prototype.pause = function () {
-    if (this.status !== "active") {
-      throw new Error("Can only pause active time entries");
-    }
-    this.status = "paused";
-    return this.save();
-  };
-
-  TimeEntry.prototype.resume = function () {
-    if (this.status !== "paused") {
-      throw new Error("Can only resume paused time entries");
-    }
-    this.status = "active";
-    return this.save();
-  };
-
   TimeEntry.prototype.complete = function (description) {
-    this.status = "completed";
-    this.endTime = new Date();
+    const now = new Date();
+    this.endTime = now;
+
     if (description) {
       this.description = description;
     }
+
     return this.save();
   };
 

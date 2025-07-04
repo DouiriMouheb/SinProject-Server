@@ -28,52 +28,67 @@ router.use(requireUser);
 router.get(
   "/",
   catchAsync(async (req, res) => {
-    const {
-      page = 1,
-      limit = 20,
-      search = "",
-      status = "",
-      customerId = "",
-    } = req.query;
-    const offset = (page - 1) * limit;
+    try {
+      const {
+        page = 1,
+        limit = 20,
+        search = "",
+        status = "",
+        customerId = "",
+      } = req.query;
+      const offset = (page - 1) * limit;
 
-    const where = { isActive: true };
+      const where = {};
 
-    if (search) {
-      where.name = { [Op.iLike]: `%${search}%` };
-    }
-    if (status) {
-      where.status = status;
-    }
-    if (customerId) {
-      where.customerId = customerId;
-    }
+      if (search) {
+        where.name = { [Op.iLike]: `%${search}%` };
+      }
+      if (status) {
+        where.status = status;
+      }
+      if (customerId) {
+        where.customerId = customerId;
+      }
 
-    const { count, rows: projects } = await WorkProject.findAndCountAll({
-      where,
-      include: [
-        {
-          model: Customer,
-          as: "customer",
-          attributes: ["id", "name"],
+      console.log("Fetching work projects with filters:", where);
+
+      const { count, rows: projects } = await WorkProject.findAndCountAll({
+        where,
+        include: [
+          {
+            model: Customer,
+            as: "customer",
+            attributes: ["id", "name"],
+          },
+        ],
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        order: [["name", "ASC"]],
+      });
+
+      console.log(`Found ${projects.length} projects`);
+
+      res.json({
+        success: true,
+        data: {
+          projects,
+          pagination: {
+            currentPage: parseInt(page),
+            totalPages: Math.ceil(count / limit),
+            totalProjects: count,
+          },
         },
-      ],
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-      order: [["name", "ASC"]],
-    });
-
-    res.json({
-      success: true,
-      data: {
-        projects,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(count / limit),
-          totalProjects: count,
+      });
+    } catch (error) {
+      console.error("Error fetching work projects:", error);
+      res.status(500).json({
+        success: false,
+        error: {
+          message: "Failed to fetch work projects",
+          details: error.message,
         },
-      },
-    });
+      });
+    }
   })
 );
 
@@ -122,27 +137,40 @@ router.post(
 router.get(
   "/processes-activities",
   catchAsync(async (req, res) => {
-    const processes = await Process.findAll({
-      where: { isActive: true },
-      include: [
-        {
-          model: Activity,
-          as: "activities",
-          where: { isActive: true },
-          required: false,
-          attributes: ["id", "name", "description", "estimatedMinutes"],
-        },
-      ],
-      order: [
-        ["name", "ASC"],
-        [{ model: Activity, as: "activities" }, "name", "ASC"],
-      ],
-    });
+    try {
+      console.log("Fetching processes and activities...");
 
-    res.json({
-      success: true,
-      data: { processes },
-    });
+      const processes = await Process.findAll({
+        include: [
+          {
+            model: Activity,
+            as: "activities",
+            required: false,
+            attributes: ["id", "name", "description"],
+          },
+        ],
+        order: [
+          ["name", "ASC"],
+          [{ model: Activity, as: "activities" }, "name", "ASC"],
+        ],
+      });
+
+      console.log(`Found ${processes.length} processes`);
+
+      res.json({
+        success: true,
+        data: { processes },
+      });
+    } catch (error) {
+      console.error("Error fetching processes and activities:", error);
+      res.status(500).json({
+        success: false,
+        error: {
+          message: "Failed to fetch processes and activities",
+          details: error.message,
+        },
+      });
+    }
   })
 );
 /**
@@ -178,15 +206,12 @@ router.post(
 router.get(
   "/processes",
   catchAsync(async (req, res) => {
-    const { page = 1, limit = 50, search = "", isActive = "true" } = req.query;
+    const { page = 1, limit = 50, search = "" } = req.query;
     const offset = (page - 1) * limit;
 
     const where = {};
     if (search) {
       where.name = { [Op.iLike]: `%${search}%` };
-    }
-    if (isActive !== "all") {
-      where.isActive = isActive === "true";
     }
 
     const { count, rows: processes } = await Process.findAndCountAll({
@@ -195,14 +220,7 @@ router.get(
         {
           model: Activity,
           as: "activities",
-          attributes: [
-            "id",
-            "name",
-            "description",
-            "estimatedMinutes",
-            "isActive",
-          ],
-          where: { isActive: true },
+          attributes: ["id", "name", "description", "estimatedMinutes"],
           required: false,
         },
       ],
@@ -268,7 +286,7 @@ router.put(
  */
 router.post(
   "/processes/:processId/activities",
-  validate(schemas.uuidParam, "params"),
+  validate(schemas.processIdParam, "params"),
   validate(schemas.createActivity),
   catchAsync(async (req, res) => {
     const { processId } = req.params;
@@ -321,13 +339,7 @@ router.post(
 router.get(
   "/activities",
   catchAsync(async (req, res) => {
-    const {
-      page = 1,
-      limit = 50,
-      search = "",
-      processId = "",
-      isActive = "true",
-    } = req.query;
+    const { page = 1, limit = 50, search = "", processId = "" } = req.query;
     const offset = (page - 1) * limit;
 
     const where = {};
@@ -336,9 +348,6 @@ router.get(
     }
     if (processId) {
       where.processId = processId;
-    }
-    if (isActive !== "all") {
-      where.isActive = isActive === "true";
     }
 
     const { count, rows: activities } = await Activity.findAndCountAll({

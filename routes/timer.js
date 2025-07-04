@@ -32,11 +32,11 @@ router.post(
     const { workProjectId, activityId, taskName, description } = req.body;
     const userId = req.user.id;
 
-    // Check if user already has an active timer
+    // Check if user already has an active timer (endTime is null)
     const activeTimer = await TimeEntry.findOne({
       where: {
         userId,
-        status: { [Op.in]: ["active", "paused"] },
+        endTime: null,
       },
       include: [
         {
@@ -81,7 +81,8 @@ router.post(
       taskName,
       description,
       startTime: new Date(),
-      status: "active",
+      endTime: null, // null indicates active timer
+      isManual: false,
     });
 
     // Load related data
@@ -138,7 +139,6 @@ router.post(
       description,
       startTime,
       endTime,
-      durationMinutes,
     } = req.body;
     const userId = req.user.id;
 
@@ -180,9 +180,6 @@ router.post(
       description,
       startTime: start,
       endTime: end,
-      durationMinutes:
-        durationMinutes || Math.floor((end - start) / (1000 * 60)),
-      status: "completed",
       isManual: true,
     });
 
@@ -214,7 +211,6 @@ router.post(
       timeEntryId: timeEntry.id,
       projectName: timeEntry.workProject.name,
       activityName: timeEntry.activity.name,
-      duration: timeEntry.durationMinutes,
     });
 
     res.status(201).json({
@@ -236,11 +232,11 @@ router.put(
     const { description } = req.body;
     const userId = req.user.id;
 
-    // Find active timer
+    // Find active timer (endTime is null)
     const activeTimer = await TimeEntry.findOne({
       where: {
         userId,
-        status: { [Op.in]: ["active", "paused"] },
+        endTime: null,
       },
     });
 
@@ -252,12 +248,16 @@ router.put(
     }
 
     // Complete the timer
-    await activeTimer.complete(description);
+    const now = new Date();
+
+    await activeTimer.update({
+      endTime: now,
+      description: description || activeTimer.description,
+    });
 
     logger.info("Timer stopped", {
       userId,
       timeEntryId: activeTimer.id,
-      duration: activeTimer.durationMinutes,
     });
 
     res.json({
@@ -266,8 +266,6 @@ router.put(
       data: {
         timeEntry: {
           id: activeTimer.id,
-          durationMinutes: activeTimer.durationMinutes,
-          status: activeTimer.status,
           endTime: activeTimer.endTime,
         },
       },
@@ -277,75 +275,37 @@ router.put(
 
 /**
  * @route   PUT /api/timer/pause
- * @desc    Pause active timer
+ * @desc    Pause active timer (Not available without status field)
  * @access  Private
  */
 router.put(
   "/pause",
   catchAsync(async (req, res) => {
-    const userId = req.user.id;
-
-    const activeTimer = await TimeEntry.findOne({
-      where: {
-        userId,
-        status: "active",
-      },
-    });
-
-    if (!activeTimer) {
-      return res.status(400).json({
-        success: false,
-        message: "No active timer found",
-      });
-    }
-
-    await activeTimer.pause();
-
-    res.json({
-      success: true,
-      message: "Timer paused successfully",
-      data: { timeEntry: activeTimer },
+    res.status(400).json({
+      success: false,
+      message: "Pause functionality not available in simplified timer mode",
     });
   })
 );
 
 /**
  * @route   PUT /api/timer/resume
- * @desc    Resume paused timer
+ * @desc    Resume paused timer (Not available without status field)
  * @access  Private
  */
 router.put(
   "/resume",
   catchAsync(async (req, res) => {
-    const userId = req.user.id;
-
-    const pausedTimer = await TimeEntry.findOne({
-      where: {
-        userId,
-        status: "paused",
-      },
-    });
-
-    if (!pausedTimer) {
-      return res.status(400).json({
-        success: false,
-        message: "No paused timer found",
-      });
-    }
-
-    await pausedTimer.resume();
-
-    res.json({
-      success: true,
-      message: "Timer resumed successfully",
-      data: { timeEntry: pausedTimer },
+    res.status(400).json({
+      success: false,
+      message: "Resume functionality not available in simplified timer mode",
     });
   })
 );
 
 /**
  * @route   GET /api/timer/active
- * @desc    Get current active timer
+ * @desc    Get current active timer (optimized)
  * @access  Private
  */
 router.get(
@@ -353,28 +313,37 @@ router.get(
   catchAsync(async (req, res) => {
     const userId = req.user.id;
 
+    // Optimized query with selective attributes
     const activeTimer = await TimeEntry.findOne({
       where: {
         userId,
-        status: { [Op.in]: ["active", "paused"] },
+        endTime: null, // Active timer has no end time
       },
+      attributes: [
+        "id",
+        "taskName",
+        "description",
+        "startTime",
+        "workProjectId",
+        "activityId",
+      ],
       include: [
         {
           model: WorkProject,
           as: "workProject",
-          attributes: ["name"],
+          attributes: ["id", "name"],
           include: [
             {
               model: Customer,
               as: "customer",
-              attributes: ["name"],
+              attributes: ["id", "name"],
             },
           ],
         },
         {
           model: Activity,
           as: "activity",
-          attributes: ["name"],
+          attributes: ["id", "name"],
         },
       ],
     });
@@ -413,9 +382,14 @@ router.get(
 
     const where = { userId };
 
-    // Status filter
+    // Completion filter - replace status with endTime logic
     if (status && status !== "all") {
-      where.status = status;
+      if (status === "completed") {
+        where.endTime = { [Op.ne]: null }; // Completed entries have endTime
+      } else if (status === "active") {
+        where.endTime = null; // Active entries have no endTime
+      }
+      // Note: "paused" status not available without status field
     }
 
     // Date range filter
@@ -535,8 +509,8 @@ router.put(
       });
     }
 
-    // Only allow editing completed entries
-    if (timeEntry.status !== "completed") {
+    // Only allow editing completed entries (entries with endTime)
+    if (!timeEntry.endTime) {
       return res.status(400).json({
         success: false,
         message: "Only completed time entries can be edited",
@@ -605,8 +579,8 @@ router.delete(
       });
     }
 
-    // Only allow deleting completed entries
-    if (timeEntry.status !== "completed") {
+    // Only allow deleting completed entries (entries with endTime)
+    if (!timeEntry.endTime) {
       return res.status(400).json({
         success: false,
         message: "Only completed time entries can be deleted",
@@ -616,7 +590,6 @@ router.delete(
     // Store info for logging before deletion
     const entryInfo = {
       taskName: timeEntry.taskName,
-      durationMinutes: timeEntry.durationMinutes,
     };
 
     await timeEntry.destroy();
@@ -625,7 +598,6 @@ router.delete(
       userId,
       timeEntryId: id,
       taskName: entryInfo.taskName,
-      duration: entryInfo.durationMinutes,
     });
 
     res.json({

@@ -27,16 +27,6 @@ module.exports = (sequelize, DataTypes) => {
       description: {
         type: DataTypes.TEXT,
       },
-      estimatedMinutes: {
-        type: DataTypes.INTEGER,
-        validate: {
-          min: 0,
-        },
-      },
-      isActive: {
-        type: DataTypes.BOOLEAN,
-        defaultValue: true,
-      },
     },
     {
       tableName: "activities",
