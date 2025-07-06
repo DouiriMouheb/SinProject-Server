@@ -145,6 +145,11 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: "userId",
       as: "timeEntries",
     });
+
+    User.hasMany(models.DailyLoginTracker, {
+      foreignKey: "userId",
+      as: "dailyLoginTrackers",
+    });
   };
 
   return User;

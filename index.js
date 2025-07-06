@@ -22,6 +22,7 @@ const adminRoutes = require("./routes/admin");
 const timerRoutes = require("./routes/timer");
 const customerRoutes = require("./routes/customers");
 const projectRoutes = require("./routes/projects");
+const dailyLoginRoutes = require("./routes/dailyLogin");
 
 const app = express();
 
@@ -84,6 +85,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/timer", timerRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/projects", projectRoutes);
+app.use("/api/daily-login", dailyLoginRoutes);
 
 // 404 handler
 app.use(handleNotFound);
