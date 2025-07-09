@@ -15,22 +15,62 @@ module.exports = (sequelize, DataTypes) => {
           model: "users",
           key: "id",
         },
+        field: "user_id",
       },
-      workProjectId: {
+      organizationId: {
         type: DataTypes.UUID,
-        allowNull: true,
+        allowNull: false,
         references: {
-          model: "work_projects",
+          model: "organizations",
           key: "id",
         },
+        field: "organization_id",
+      },
+      customerId: {
+        type: DataTypes.UUID,
+        allowNull: true, // Made nullable to allow existing data
+        references: {
+          model: "customers",
+          key: "id",
+        },
+        field: "customer_id",
+      },
+      processId: {
+        type: DataTypes.UUID,
+        allowNull: false,
+        references: {
+          model: "processes",
+          key: "id",
+        },
+        field: "process_id",
       },
       activityId: {
         type: DataTypes.UUID,
-        allowNull: true,
+        allowNull: false,
         references: {
           model: "activities",
           key: "id",
         },
+        field: "activity_id",
+      },
+      projectId: {
+        type: DataTypes.UUID,
+        allowNull: true, // Projects are optional
+        references: {
+          model: "projects",
+          key: "id",
+        },
+        field: "project_id",
+      },
+      workPlaceType: {
+        type: DataTypes.ENUM("organization", "customer", "home"),
+        allowNull: false,
+        field: "work_location_type",
+      },
+      workPlaceAddress: {
+        type: DataTypes.STRING(500),
+        allowNull: true,
+        field: "work_location_address",
       },
       taskName: {
         type: DataTypes.STRING(300),
@@ -39,6 +79,7 @@ module.exports = (sequelize, DataTypes) => {
           notEmpty: true,
           len: [2, 300],
         },
+        field: "task_name",
       },
       description: {
         type: DataTypes.TEXT,
@@ -46,6 +87,7 @@ module.exports = (sequelize, DataTypes) => {
       startTime: {
         type: DataTypes.DATE,
         allowNull: false,
+        field: "start_time",
       },
       endTime: {
         type: DataTypes.DATE,
@@ -56,10 +98,25 @@ module.exports = (sequelize, DataTypes) => {
             }
           },
         },
+        field: "end_time",
+      },
+      date: {
+        type: DataTypes.DATEONLY,
+        allowNull: false,
+        defaultValue: DataTypes.NOW,
+      },
+      duration: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        comment: "Duration in minutes",
+      },
+      notes: {
+        type: DataTypes.TEXT,
       },
       isManual: {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
+        field: "is_manual",
       },
       breaks: {
         type: DataTypes.JSON,
@@ -110,14 +167,29 @@ module.exports = (sequelize, DataTypes) => {
       as: "user",
     });
 
-    TimeEntry.belongsTo(models.WorkProject, {
-      foreignKey: "workProjectId",
-      as: "workProject",
+    TimeEntry.belongsTo(models.Organization, {
+      foreignKey: "organizationId",
+      as: "organization",
+    });
+
+    TimeEntry.belongsTo(models.Customer, {
+      foreignKey: "customerId",
+      as: "customer",
+    });
+
+    TimeEntry.belongsTo(models.Process, {
+      foreignKey: "processId",
+      as: "process",
     });
 
     TimeEntry.belongsTo(models.Activity, {
       foreignKey: "activityId",
       as: "activity",
+    });
+
+    TimeEntry.belongsTo(models.Project, {
+      foreignKey: "projectId",
+      as: "workProject", // Match client-side expectation
     });
   };
 

@@ -1,9 +1,9 @@
 // routes/customers.js
 const express = require("express");
 const { Op } = require("sequelize");
-const { Customer, WorkProject } = require("../models");
+const { Customer, Organization, Project } = require("../models");
 const { authenticate } = require("../middleware/auth");
-const { requireAdmin } = require("../middleware/rbac");
+const { requireUser } = require("../middleware/rbac");
 const { validate, schemas } = require("../middleware/validation");
 const { catchAsync } = require("../middleware/errorHandler");
 const logger = require("../utils/logger");
@@ -12,7 +12,7 @@ const router = express.Router();
 
 // Apply authentication to all routes
 router.use(authenticate);
-router.use(requireAdmin); // Changed to admin-only access
+router.use(requireUser); // Changed to user access
 
 /**
  * @route   GET /api/customers
@@ -37,10 +37,15 @@ router.get(
       where,
       include: [
         {
-          model: WorkProject,
+          model: Organization,
+          as: "organization",
+          attributes: ["id", "name"],
+        },
+        {
+          model: Project,
           as: "workProjects",
-          attributes: ["id", "name", "description"],
-          required: false,
+          attributes: ["id", "name", "status", "startDate", "endDate"],
+          required: false, // Left join, so customers without projects are still included
         },
       ],
       limit: parseInt(limit),
@@ -99,10 +104,23 @@ router.get(
     const customer = await Customer.findByPk(req.params.id, {
       include: [
         {
-          model: WorkProject,
+          model: Organization,
+          as: "organization",
+          attributes: ["id", "name"],
+        },
+        {
+          model: Project,
           as: "workProjects",
-          attributes: ["id", "name", "description"],
-          required: false,
+          attributes: [
+            "id",
+            "name",
+            "description",
+            "status",
+            "startDate",
+            "endDate",
+            "isActive",
+          ],
+          order: [["name", "ASC"]],
         },
       ],
     });
@@ -165,15 +183,7 @@ router.delete(
   "/:id",
   validate(schemas.uuidParam, "params"),
   catchAsync(async (req, res) => {
-    const customer = await Customer.findByPk(req.params.id, {
-      include: [
-        {
-          model: WorkProject,
-          as: "workProjects",
-          required: false,
-        },
-      ],
-    });
+    const customer = await Customer.findByPk(req.params.id);
 
     if (!customer) {
       return res.status(404).json({
@@ -182,12 +192,13 @@ router.delete(
       });
     }
 
-    // Check if customer has active projects
-    if (customer.workProjects && customer.workProjects.length > 0) {
+    // Check if customer has active time entries
+    const activeTimeEntries = await customer.countTimeEntries();
+    if (activeTimeEntries > 0) {
       return res.status(400).json({
         success: false,
         message:
-          "Cannot delete customer with active projects. Please deactivate or reassign projects first.",
+          "Cannot delete customer with existing time entries. Please remove time entries first.",
       });
     }
 

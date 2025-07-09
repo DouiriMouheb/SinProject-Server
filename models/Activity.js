@@ -11,6 +11,7 @@ module.exports = (sequelize, DataTypes) => {
       processId: {
         type: DataTypes.UUID,
         allowNull: false,
+        field: "process_id",
         references: {
           model: "processes",
           key: "id",
@@ -36,7 +37,8 @@ module.exports = (sequelize, DataTypes) => {
   // Associations
   Activity.associate = function (models) {
     Activity.belongsTo(models.Process, {
-      foreignKey: "processId",
+      foreignKey: "process_id",
+      targetKey: "id",
       as: "process",
     });
 

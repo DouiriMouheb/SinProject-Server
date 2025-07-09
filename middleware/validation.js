@@ -58,20 +58,17 @@ const schemas = {
     isActive: Joi.boolean(),
   }).min(1),
 
-  // Time entry schemas
+  // Time entry schema - NEW STRUCTURE
   createTimeEntry: Joi.object({
-    workProjectId: commonFields.uuid.required(),
+    organizationId: commonFields.uuid.required(),
+    customerId: commonFields.uuid.required(),
+    processId: commonFields.uuid.required(),
     activityId: commonFields.uuid.required(),
+    workLocationType: Joi.string()
+      .valid("organization", "customer", "home")
+      .required(),
     taskName: Joi.string().trim().min(2).max(300).required(),
-    description: Joi.string().trim().max(1000),
-  }),
-
-  // NEW: Manual time entry schema
-  createManualTimeEntry: Joi.object({
-    workProjectId: commonFields.uuid.required(),
-    activityId: commonFields.uuid.required(),
-    taskName: Joi.string().trim().min(2).max(300).required(),
-    description: Joi.string().trim().max(1000),
+    date: Joi.date().required(),
     startTime: Joi.date().required().messages({
       "date.base": "Start time must be a valid date",
       "any.required": "Start time is required",
@@ -81,14 +78,20 @@ const schemas = {
       "any.required": "End time is required",
       "date.greater": "End time must be after start time",
     }),
-    isManual: Joi.boolean().default(true),
+    notes: Joi.string().trim().max(1000).allow(""),
   }),
 
   updateTimeEntry: Joi.object({
+    organizationId: commonFields.uuid,
+    customerId: commonFields.uuid,
+    processId: commonFields.uuid,
+    activityId: commonFields.uuid,
+    workLocationType: Joi.string().valid("organization", "customer", "home"),
     taskName: Joi.string().trim().min(2).max(300),
-    description: Joi.string().trim().max(1000),
+    date: Joi.date(),
     startTime: Joi.date(),
     endTime: Joi.date(),
+    notes: Joi.string().trim().max(1000).allow(""),
   })
     .min(1)
     .custom((value, helpers) => {
@@ -103,38 +106,43 @@ const schemas = {
       return value;
     }),
 
+  // Organization schemas
+  createOrganization: Joi.object({
+    name: Joi.string().trim().min(2).max(200).required(),
+    description: Joi.string().trim().max(1000),
+    address: Joi.string().trim().max(500),
+    isActive: Joi.boolean().default(true),
+  }),
+
+  updateOrganization: Joi.object({
+    name: Joi.string().trim().min(2).max(200),
+    description: Joi.string().trim().max(1000),
+    address: Joi.string().trim().max(500),
+    isActive: Joi.boolean(),
+  }).min(1),
+
   // Customer schemas
   createCustomer: Joi.object({
     name: Joi.string().trim().min(2).max(200).required(),
+    organizationId: commonFields.uuid.required(),
     description: Joi.string().trim().max(1000),
     contactEmail: commonFields.email,
     contactPhone: Joi.string().trim().max(50),
     address: Joi.string().trim().max(500),
+    workLocation: Joi.string().trim().max(500),
+    isActive: Joi.boolean().default(true),
   }),
 
-  // Project schemas
-  createProject: Joi.object({
-    customerId: commonFields.uuid.required(),
-    name: Joi.string().trim().min(2).max(200).required(),
-    description: Joi.string().trim().max(1000),
-
-    startDate: Joi.date(),
-    endDate: Joi.date().greater(Joi.ref("startDate")).messages({
-      "date.greater": "End date must be after start date",
-    }),
-    budget: Joi.number().min(0),
-  }),
-
-  updateProject: Joi.object({
+  updateCustomer: Joi.object({
     name: Joi.string().trim().min(2).max(200),
+    organizationId: commonFields.uuid,
     description: Joi.string().trim().max(1000),
-
-    startDate: Joi.date(),
-    endDate: Joi.date().greater(Joi.ref("startDate")).messages({
-      "date.greater": "End date must be after start date",
-    }),
-    budget: Joi.number().min(0),
-  }),
+    contactEmail: commonFields.email,
+    contactPhone: Joi.string().trim().max(50),
+    address: Joi.string().trim().max(500),
+    workLocation: Joi.string().trim().max(500),
+    isActive: Joi.boolean(),
+  }).min(1),
 
   // UUID param validation
   uuidParam: Joi.object({

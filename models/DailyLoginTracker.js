@@ -15,31 +15,37 @@ module.exports = (sequelize, DataTypes) => {
           model: "users",
           key: "id",
         },
+        field: "user_id", // Map to snake_case column in DB
       },
       loginDate: {
         type: DataTypes.DATEONLY, // Only stores date without time
         allowNull: false,
         comment: "The date of the first login (YYYY-MM-DD format)",
+        field: "login_date", // Map to snake_case column in DB
       },
       firstLoginTime: {
         type: DataTypes.DATE,
         allowNull: false,
         comment: "Timestamp of the first login for this date",
+        field: "first_login_time", // Map to snake_case column in DB
       },
       dayEndTime: {
         type: DataTypes.DATE,
         allowNull: true,
         comment: "Timestamp when user ended their day (optional)",
+        field: "day_end_time", // Map to snake_case column in DB
       },
       ipAddress: {
         type: DataTypes.STRING(45), // IPv6 max length
         allowNull: true,
         comment: "IP address of the first login",
+        field: "ip_address", // Map to snake_case column in DB
       },
       userAgent: {
         type: DataTypes.TEXT,
         allowNull: true,
         comment: "User agent string from the first login",
+        field: "user_agent", // Map to snake_case column in DB
       },
       location: {
         type: DataTypes.STRING(255),
@@ -55,6 +61,7 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.DECIMAL(5, 2), // Max 999.99 hours
         allowNull: true,
         comment: "Calculated working hours if day end time is set",
+        field: "total_working_hours", // Map to snake_case column in DB
       },
     },
     {
@@ -62,19 +69,19 @@ module.exports = (sequelize, DataTypes) => {
       indexes: [
         {
           unique: true,
-          fields: ["userId", "loginDate"],
+          fields: ["user_id", "login_date"],
           name: "unique_user_date",
         },
         {
-          fields: ["loginDate"],
+          fields: ["login_date"],
           name: "idx_login_date",
         },
         {
-          fields: ["userId"],
+          fields: ["user_id"],
           name: "idx_user_id",
         },
         {
-          fields: ["firstLoginTime"],
+          fields: ["first_login_time"],
           name: "idx_first_login_time",
         },
       ],

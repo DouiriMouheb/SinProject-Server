@@ -28,8 +28,14 @@ module.exports = (sequelize, DataTypes) => {
   // Associations
   Process.associate = function (models) {
     Process.hasMany(models.Activity, {
-      foreignKey: "processId",
+      foreignKey: "process_id",
+      sourceKey: "id",
       as: "activities",
+    });
+
+    Process.hasMany(models.TimeEntry, {
+      foreignKey: "processId",
+      as: "timeEntries",
     });
   };
 

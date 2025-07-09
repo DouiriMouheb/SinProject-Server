@@ -3,9 +3,10 @@ const express = require("express");
 const {
   User,
   TimeEntry,
-  WorkProject,
   Customer,
   Activity,
+  Organization,
+  Process,
   sequelize,
 } = require("../models");
 const { authenticate } = require("../middleware/auth");
@@ -277,16 +278,9 @@ router.get(
           required: false,
           include: [
             {
-              model: WorkProject,
-              as: "workProject",
+              model: Customer,
+              as: "customer",
               attributes: ["name"],
-              include: [
-                {
-                  model: Customer,
-                  as: "customer",
-                  attributes: ["name"],
-                },
-              ],
             },
             {
               model: Activity,

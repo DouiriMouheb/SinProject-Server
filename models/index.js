@@ -19,9 +19,14 @@ const sequelize = new Sequelize(
 // Import models
 const User = require("./User")(sequelize, Sequelize.DataTypes);
 const Customer = require("./Customer")(sequelize, Sequelize.DataTypes);
-const WorkProject = require("./WorkProject")(sequelize, Sequelize.DataTypes);
+const Organization = require("./Organization")(sequelize, Sequelize.DataTypes);
+const UserOrganization = require("./UserOrganization")(
+  sequelize,
+  Sequelize.DataTypes
+);
 const Process = require("./Process")(sequelize, Sequelize.DataTypes);
 const Activity = require("./Activity")(sequelize, Sequelize.DataTypes);
+const Project = require("./Project")(sequelize, Sequelize.DataTypes);
 const TimeEntry = require("./TimeEntry")(sequelize, Sequelize.DataTypes);
 const DailyLoginTracker = require("./DailyLoginTracker")(
   sequelize,
@@ -34,9 +39,11 @@ const db = {
   Sequelize,
   User,
   Customer,
-  WorkProject,
+  Organization,
+  UserOrganization,
   Process,
   Activity,
+  Project,
   TimeEntry,
   DailyLoginTracker,
 };

@@ -1,18 +1,10 @@
-// routes/projects.js
+// routes/projects.js - Project management routes
 const express = require("express");
-const {
-  WorkProject,
-  Customer,
-  TimeEntry,
-  Activity,
-  Process,
-} = require("../models");
+const { Project, Customer, User, TimeEntry } = require("../models");
 const { authenticate } = require("../middleware/auth");
-const { requireUser } = require("../middleware/rbac");
-const { validate, schemas } = require("../middleware/validation");
+const { requireAdmin, requireUser } = require("../middleware/rbac");
 const { catchAsync } = require("../middleware/errorHandler");
 const logger = require("../utils/logger");
-const { Op } = require("sequelize");
 
 const router = express.Router();
 
@@ -22,394 +14,35 @@ router.use(requireUser);
 
 /**
  * @route   GET /api/projects
- * @desc    Get all work projects
- * @access  Private
+ * @desc    Get all projects (Admin only)
+ * @access  Private (Admin)
  */
 router.get(
   "/",
+  requireAdmin,
   catchAsync(async (req, res) => {
-    try {
-      const {
-        page = 1,
-        limit = 20,
-        search = "",
-        status = "",
-        customerId = "",
-      } = req.query;
-      const offset = (page - 1) * limit;
+    const { customerId, status, isActive } = req.query;
 
-      const where = {};
+    const where = {};
+    if (customerId) where.customerId = customerId;
+    if (status) where.status = status;
+    if (isActive !== undefined) where.isActive = isActive === "true";
 
-      if (search) {
-        where.name = { [Op.iLike]: `%${search}%` };
-      }
-      if (status) {
-        where.status = status;
-      }
-      if (customerId) {
-        where.customerId = customerId;
-      }
-
-      console.log("Fetching work projects with filters:", where);
-
-      const { count, rows: projects } = await WorkProject.findAndCountAll({
-        where,
-        include: [
-          {
-            model: Customer,
-            as: "customer",
-            attributes: ["id", "name"],
-          },
-        ],
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        order: [["name", "ASC"]],
-      });
-
-      console.log(`Found ${projects.length} projects`);
-
-      res.json({
-        success: true,
-        data: {
-          projects,
-          pagination: {
-            currentPage: parseInt(page),
-            totalPages: Math.ceil(count / limit),
-            totalProjects: count,
-          },
-        },
-      });
-    } catch (error) {
-      console.error("Error fetching work projects:", error);
-      res.status(500).json({
-        success: false,
-        error: {
-          message: "Failed to fetch work projects",
-          details: error.message,
-        },
-      });
-    }
-  })
-);
-
-/**
- * @route   POST /api/projects
- * @desc    Create new work project
- * @access  Private
- */
-router.post(
-  "/",
-  validate(schemas.createProject),
-  catchAsync(async (req, res) => {
-    const project = await WorkProject.create(req.body);
-
-    // Load with customer data
-    await project.reload({
+    const projects = await Project.findAll({
+      where,
       include: [
         {
           model: Customer,
           as: "customer",
-          attributes: ["id", "name"],
+          attributes: ["id", "name", "organizationId"],
         },
       ],
-    });
-
-    logger.info("Work project created", {
-      userId: req.user.id,
-      projectId: project.id,
-      projectName: project.name,
-      customerId: project.customerId,
-    });
-
-    res.status(201).json({
-      success: true,
-      message: "Work project created successfully",
-      data: { project },
-    });
-  })
-);
-
-/**
- * @route   GET /api/projects/processes-activities
- * @desc    Get all processes and their activities
- * @access  Private
- */
-router.get(
-  "/processes-activities",
-  catchAsync(async (req, res) => {
-    try {
-      console.log("Fetching processes and activities...");
-
-      const processes = await Process.findAll({
-        include: [
-          {
-            model: Activity,
-            as: "activities",
-            required: false,
-            attributes: ["id", "name", "description"],
-          },
-        ],
-        order: [
-          ["name", "ASC"],
-          [{ model: Activity, as: "activities" }, "name", "ASC"],
-        ],
-      });
-
-      console.log(`Found ${processes.length} processes`);
-
-      res.json({
-        success: true,
-        data: { processes },
-      });
-    } catch (error) {
-      console.error("Error fetching processes and activities:", error);
-      res.status(500).json({
-        success: false,
-        error: {
-          message: "Failed to fetch processes and activities",
-          details: error.message,
-        },
-      });
-    }
-  })
-);
-/**
- * @route   POST /api/projects/processes
- * @desc    Create new process
- * @access  Private
- */
-router.post(
-  "/processes",
-  validate(schemas.createProcess),
-  catchAsync(async (req, res) => {
-    const process = await Process.create(req.body);
-
-    logger.info("Process created", {
-      userId: req.user.id,
-      processId: process.id,
-      processName: process.name,
-    });
-
-    res.status(201).json({
-      success: true,
-      message: "Process created successfully",
-      data: { process },
-    });
-  })
-);
-
-/**
- * @route   GET /api/projects/processes
- * @desc    Get all processes
- * @access  Private
- */
-router.get(
-  "/processes",
-  catchAsync(async (req, res) => {
-    const { page = 1, limit = 50, search = "" } = req.query;
-    const offset = (page - 1) * limit;
-
-    const where = {};
-    if (search) {
-      where.name = { [Op.iLike]: `%${search}%` };
-    }
-
-    const { count, rows: processes } = await Process.findAndCountAll({
-      where,
-      include: [
-        {
-          model: Activity,
-          as: "activities",
-          attributes: ["id", "name", "description", "estimatedMinutes"],
-          required: false,
-        },
-      ],
-      limit: parseInt(limit),
-      offset: parseInt(offset),
       order: [["name", "ASC"]],
     });
 
     res.json({
       success: true,
-      data: {
-        processes,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(count / limit),
-          totalProcesses: count,
-        },
-      },
-    });
-  })
-);
-
-/**
- * @route   PUT /api/projects/processes/:id
- * @desc    Update process
- * @access  Private
- */
-router.put(
-  "/processes/:id",
-  validate(schemas.uuidParam, "params"),
-  validate(schemas.updateProcess),
-  catchAsync(async (req, res) => {
-    const { id } = req.params;
-
-    const process = await Process.findByPk(id);
-    if (!process) {
-      return res.status(404).json({
-        success: false,
-        message: "Process not found",
-      });
-    }
-
-    await process.update(req.body);
-
-    logger.info("Process updated", {
-      userId: req.user.id,
-      processId: id,
-      updatedFields: Object.keys(req.body),
-    });
-
-    res.json({
-      success: true,
-      message: "Process updated successfully",
-      data: { process },
-    });
-  })
-);
-
-/**
- * @route   POST /api/projects/processes/:processId/activities
- * @desc    Create new activity for a process
- * @access  Private
- */
-router.post(
-  "/processes/:processId/activities",
-  validate(schemas.processIdParam, "params"),
-  validate(schemas.createActivity),
-  catchAsync(async (req, res) => {
-    const { processId } = req.params;
-
-    // Verify process exists
-    const process = await Process.findByPk(processId);
-    if (!process) {
-      return res.status(404).json({
-        success: false,
-        message: "Process not found",
-      });
-    }
-
-    const activity = await Activity.create({
-      ...req.body,
-      processId,
-    });
-
-    // Load with process data
-    await activity.reload({
-      include: [
-        {
-          model: Process,
-          as: "process",
-          attributes: ["id", "name"],
-        },
-      ],
-    });
-
-    logger.info("Activity created", {
-      userId: req.user.id,
-      activityId: activity.id,
-      activityName: activity.name,
-      processId,
-    });
-
-    res.status(201).json({
-      success: true,
-      message: "Activity created successfully",
-      data: { activity },
-    });
-  })
-);
-
-/**
- * @route   GET /api/projects/activities
- * @desc    Get all activities
- * @access  Private
- */
-router.get(
-  "/activities",
-  catchAsync(async (req, res) => {
-    const { page = 1, limit = 50, search = "", processId = "" } = req.query;
-    const offset = (page - 1) * limit;
-
-    const where = {};
-    if (search) {
-      where.name = { [Op.iLike]: `%${search}%` };
-    }
-    if (processId) {
-      where.processId = processId;
-    }
-
-    const { count, rows: activities } = await Activity.findAndCountAll({
-      where,
-      include: [
-        {
-          model: Process,
-          as: "process",
-          attributes: ["id", "name", "category"],
-        },
-      ],
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-      order: [["name", "ASC"]],
-    });
-
-    res.json({
-      success: true,
-      data: {
-        activities,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(count / limit),
-          totalActivities: count,
-        },
-      },
-    });
-  })
-);
-
-/**
- * @route   PUT /api/projects/activities/:id
- * @desc    Update activity
- * @access  Private
- */
-router.put(
-  "/activities/:id",
-  validate(schemas.uuidParam, "params"),
-  validate(schemas.updateActivity),
-  catchAsync(async (req, res) => {
-    const { id } = req.params;
-
-    const activity = await Activity.findByPk(id);
-    if (!activity) {
-      return res.status(404).json({
-        success: false,
-        message: "Activity not found",
-      });
-    }
-
-    await activity.update(req.body);
-
-    logger.info("Activity updated", {
-      userId: req.user.id,
-      activityId: id,
-      updatedFields: Object.keys(req.body),
-    });
-
-    res.json({
-      success: true,
-      message: "Activity updated successfully",
-      data: { activity },
+      data: { projects },
     });
   })
 );
@@ -421,14 +54,28 @@ router.put(
  */
 router.get(
   "/:id",
-  validate(schemas.uuidParam, "params"),
   catchAsync(async (req, res) => {
-    const project = await WorkProject.findByPk(req.params.id, {
+    const { id } = req.params;
+
+    const project = await Project.findByPk(id, {
       include: [
         {
           model: Customer,
           as: "customer",
-          attributes: ["id", "name"],
+          attributes: [
+            "id",
+            "name",
+            "organizationId",
+            "contactEmail",
+            "contactPhone",
+          ],
+        },
+        {
+          model: TimeEntry,
+          as: "timeEntries",
+          attributes: ["id", "date", "duration", "taskName"],
+          limit: 10,
+          order: [["date", "DESC"]],
         },
       ],
     });
@@ -443,22 +90,146 @@ router.get(
     res.json({
       success: true,
       data: { project },
+    });
+  })
+);
+
+/**
+ * @route   GET /api/projects/customer/:customerId
+ * @desc    Get projects for a specific customer
+ * @access  Private
+ */
+router.get(
+  "/customer/:customerId",
+  catchAsync(async (req, res) => {
+    const { customerId } = req.params;
+    const { status, isActive } = req.query;
+
+    // Verify customer exists
+    const customer = await Customer.findByPk(customerId);
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
+      });
+    }
+
+    const where = { customerId };
+    if (status) where.status = status;
+    if (isActive !== undefined) where.isActive = isActive === "true";
+
+    const projects = await Project.findAll({
+      where,
+      include: [
+        {
+          model: Customer,
+          as: "customer",
+          attributes: ["id", "name"],
+        },
+      ],
+      order: [["name", "ASC"]],
+    });
+
+    res.json({
+      success: true,
+      data: { projects },
+    });
+  })
+);
+
+/**
+ * @route   POST /api/projects
+ * @desc    Create a new project
+ * @access  Private (Admin)
+ */
+router.post(
+  "/",
+  requireAdmin,
+  catchAsync(async (req, res) => {
+    const {
+      name,
+      description,
+      customerId,
+      startDate,
+      endDate,
+      budget,
+      status = "planning",
+    } = req.body;
+
+    // Validate required fields
+    if (!name || !customerId) {
+      return res.status(400).json({
+        success: false,
+        message: "Project name and customer ID are required",
+      });
+    }
+
+    // Verify customer exists
+    const customer = await Customer.findByPk(customerId);
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer not found",
+      });
+    }
+
+    // Validate dates if provided
+    if (startDate && endDate && new Date(endDate) <= new Date(startDate)) {
+      return res.status(400).json({
+        success: false,
+        message: "End date must be after start date",
+      });
+    }
+
+    const project = await Project.create({
+      name,
+      description,
+      customerId,
+      startDate,
+      endDate,
+      budget,
+      status,
+    });
+
+    // Fetch complete project with associations
+    const completeProject = await Project.findByPk(project.id, {
+      include: [
+        {
+          model: Customer,
+          as: "customer",
+          attributes: ["id", "name", "organizationId"],
+        },
+      ],
+    });
+
+    logger.info(`Project created: ${project.name}`, {
+      adminUserId: req.user.id,
+      projectId: project.id,
+      customerId,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Project created successfully",
+      data: { project: completeProject },
     });
   })
 );
 
 /**
  * @route   PUT /api/projects/:id
- * @desc    Update project
- * @access  Private
+ * @desc    Update a project
+ * @access  Private (Admin)
  */
 router.put(
   "/:id",
-  validate(schemas.uuidParam, "params"),
-  validate(schemas.updateProject),
+  requireAdmin,
   catchAsync(async (req, res) => {
-    const project = await WorkProject.findByPk(req.params.id);
+    const { id } = req.params;
+    const { name, description, startDate, endDate, budget, status, isActive } =
+      req.body;
 
+    const project = await Project.findByPk(id);
     if (!project) {
       return res.status(404).json({
         success: false,
@@ -466,49 +237,63 @@ router.put(
       });
     }
 
-    await project.update(req.body);
+    // Validate dates if provided
+    if (startDate && endDate && new Date(endDate) <= new Date(startDate)) {
+      return res.status(400).json({
+        success: false,
+        message: "End date must be after start date",
+      });
+    }
 
-    // Reload with customer data
-    await project.reload({
+    const updates = {};
+    if (name !== undefined) updates.name = name;
+    if (description !== undefined) updates.description = description;
+    if (startDate !== undefined) updates.startDate = startDate;
+    if (endDate !== undefined) updates.endDate = endDate;
+    if (budget !== undefined) updates.budget = budget;
+    if (status !== undefined) updates.status = status;
+    if (isActive !== undefined) updates.isActive = isActive;
+
+    await project.update(updates);
+
+    // Fetch updated project with associations
+    const updatedProject = await Project.findByPk(id, {
       include: [
         {
           model: Customer,
           as: "customer",
-          attributes: ["id", "name"],
+          attributes: ["id", "name", "organizationId"],
         },
       ],
     });
 
-    logger.info("Work project updated", {
-      userId: req.user.id,
-      projectId: project.id,
-      projectName: project.name,
+    logger.info(`Project updated: ${project.name}`, {
+      adminUserId: req.user.id,
+      projectId: id,
+      updatedFields: Object.keys(updates),
     });
 
     res.json({
       success: true,
       message: "Project updated successfully",
-      data: { project },
+      data: { project: updatedProject },
     });
   })
 );
 
 /**
  * @route   DELETE /api/projects/:id
- * @desc    Delete project
- * @access  Private
+ * @desc    Delete a project
+ * @access  Private (Admin)
  */
 router.delete(
   "/:id",
-  validate(schemas.uuidParam, "params"),
+  requireAdmin,
   catchAsync(async (req, res) => {
-    const project = await WorkProject.findByPk(req.params.id, {
-      include: [
-        {
-          model: TimeEntry,
-          as: "timeEntries",
-        },
-      ],
+    const { id } = req.params;
+
+    const project = await Project.findByPk(id, {
+      include: [{ model: TimeEntry, as: "timeEntries" }],
     });
 
     if (!project) {
@@ -518,25 +303,138 @@ router.delete(
       });
     }
 
-    // Check if project has time entries
+    // Check if project has associated time entries
     if (project.timeEntries && project.timeEntries.length > 0) {
       return res.status(400).json({
         success: false,
-        message: "Cannot delete project with existing time entries",
+        message:
+          "Cannot delete project with existing time entries. Please remove or reassign time entries first.",
       });
     }
 
     await project.destroy();
 
-    logger.info("Work project deleted", {
-      userId: req.user.id,
-      projectId: project.id,
-      projectName: project.name,
+    logger.info(`Project deleted: ${project.name}`, {
+      adminUserId: req.user.id,
+      projectId: id,
     });
 
     res.json({
       success: true,
       message: "Project deleted successfully",
+    });
+  })
+);
+
+/**
+ * @route   GET /api/projects/:id/time-entries
+ * @desc    Get time entries for a specific project
+ * @access  Private
+ */
+router.get(
+  "/:id/time-entries",
+  catchAsync(async (req, res) => {
+    const { id } = req.params;
+    const { page = 1, limit = 50, startDate, endDate } = req.query;
+
+    const project = await Project.findByPk(id);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: "Project not found",
+      });
+    }
+
+    const where = { projectId: id };
+
+    // Date filtering
+    if (startDate || endDate) {
+      where.date = {};
+      if (startDate) where.date[Op.gte] = new Date(startDate);
+      if (endDate) where.date[Op.lte] = new Date(endDate);
+    }
+
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    const { count, rows: timeEntries } = await TimeEntry.findAndCountAll({
+      where,
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "name", "email"],
+        },
+      ],
+      limit: parseInt(limit),
+      offset,
+      order: [
+        ["date", "DESC"],
+        ["startTime", "DESC"],
+      ],
+    });
+
+    res.json({
+      success: true,
+      data: {
+        timeEntries,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(count / limit),
+          totalItems: count,
+          itemsPerPage: parseInt(limit),
+        },
+      },
+    });
+  })
+);
+
+/**
+ * @route   GET /api/projects/:id/stats
+ * @desc    Get project statistics
+ * @access  Private
+ */
+router.get(
+  "/:id/stats",
+  catchAsync(async (req, res) => {
+    const { id } = req.params;
+
+    const project = await Project.findByPk(id);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: "Project not found",
+      });
+    }
+
+    // Get time entry statistics
+    const timeEntries = await TimeEntry.findAll({
+      where: { projectId: id },
+      attributes: ["duration", "date", "userId"],
+    });
+
+    const totalHours =
+      timeEntries.reduce((sum, entry) => sum + (entry.duration || 0), 0) / 60; // Convert minutes to hours
+    const uniqueUsers = new Set(timeEntries.map((entry) => entry.userId)).size;
+    const totalEntries = timeEntries.length;
+
+    // Calculate date range
+    const dates = timeEntries.map((entry) => new Date(entry.date)).sort();
+    const firstEntry = dates.length > 0 ? dates[0] : null;
+    const lastEntry = dates.length > 0 ? dates[dates.length - 1] : null;
+
+    res.json({
+      success: true,
+      data: {
+        stats: {
+          totalHours: Math.round(totalHours * 100) / 100,
+          totalEntries,
+          uniqueUsers,
+          firstEntry,
+          lastEntry,
+          budget: project.budget,
+          status: project.status,
+        },
+      },
     });
   })
 );

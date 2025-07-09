@@ -43,20 +43,30 @@ module.exports = (sequelize, DataTypes) => {
       isActive: {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
+        field: "is_active", // Map to snake_case column in DB
       },
       lastLogin: {
         type: DataTypes.DATE,
+        field: "last_login", // Map to snake_case column in DB
       },
       loginAttempts: {
         type: DataTypes.INTEGER,
         defaultValue: 0,
+        field: "login_attempts", // Map to snake_case column in DB
       },
       lockUntil: {
         type: DataTypes.DATE,
+        field: "lock_until", // Map to snake_case column in DB
       },
       passwordChangedAt: {
         type: DataTypes.DATE,
         defaultValue: DataTypes.NOW,
+        field: "password_changed_at", // Map to snake_case column in DB
+      },
+      homeAddress: {
+        type: DataTypes.STRING(500),
+        allowNull: true,
+        field: "home_address", // Map to snake_case column in DB
       },
     },
     {
@@ -149,6 +159,19 @@ module.exports = (sequelize, DataTypes) => {
     User.hasMany(models.DailyLoginTracker, {
       foreignKey: "userId",
       as: "dailyLoginTrackers",
+    });
+
+    // Many-to-many relationship with Organizations
+    User.belongsToMany(models.Organization, {
+      through: models.UserOrganization,
+      foreignKey: "userId",
+      otherKey: "organizationId",
+      as: "organizations",
+    });
+
+    User.hasMany(models.UserOrganization, {
+      foreignKey: "userId",
+      as: "userOrganizations",
     });
   };
 

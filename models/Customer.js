@@ -16,25 +16,49 @@ module.exports = (sequelize, DataTypes) => {
           len: [2, 200],
         },
       },
+      organizationId: {
+        type: DataTypes.UUID,
+        allowNull: false,
+        references: {
+          model: "organizations",
+          key: "id",
+        },
+        field: "organization_id",
+      },
       description: {
         type: DataTypes.TEXT,
+        allowNull: true,
+        validate: {
+          len: [0, 1000],
+        },
       },
       contactEmail: {
-        type: DataTypes.STRING(255),
+        type: DataTypes.STRING,
+        allowNull: true,
         validate: {
           isEmail: true,
         },
+        field: "contact_email",
       },
       contactPhone: {
         type: DataTypes.STRING(50),
+        allowNull: true,
+        field: "contact_phone",
       },
       address: {
-        type: DataTypes.TEXT,
+        type: DataTypes.STRING(500),
+        allowNull: true,
+      },
+      workLocation: {
+        type: DataTypes.STRING(500),
+        allowNull: true,
+        field: "work_location",
       },
       isActive: {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
-        field: "is_active", // Map to snake_case column in DB
+        allowNull: false,
+        field: "is_active",
       },
     },
     {
@@ -42,11 +66,25 @@ module.exports = (sequelize, DataTypes) => {
     }
   );
 
-  // Associations
   Customer.associate = function (models) {
-    Customer.hasMany(models.WorkProject, {
+    // Customer belongs to an Organization
+    Customer.belongsTo(models.Organization, {
+      foreignKey: "organization_id",
+      targetKey: "id",
+      as: "organization",
+    });
+
+    // Customer has many TimeEntries
+    Customer.hasMany(models.TimeEntry, {
       foreignKey: "customerId",
-      as: "workProjects",
+      as: "timeEntries",
+    });
+
+    // Customer has many Projects
+    Customer.hasMany(models.Project, {
+      foreignKey: "customer_id",
+      sourceKey: "id",
+      as: "workProjects", // Match the client-side expectation
     });
   };
 
