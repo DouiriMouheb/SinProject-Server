@@ -34,7 +34,7 @@ router.post(
       customerId,
       processId,
       activityId,
-      workLocationType,
+      workPlaceType, // Updated to match frontend
       workLocationAddress,
       taskName,
       description,
@@ -51,7 +51,7 @@ router.post(
       !customerId ||
       !processId ||
       !activityId ||
-      !workLocationtype ||
+      !workPlaceType ||
       !taskName ||
       !date ||
       !startTime ||
@@ -60,19 +60,7 @@ router.post(
       return res.status(400).json({
         success: false,
         message:
-          "All required fields must be provided: organizationId, customerId, processId, activityId, workLocationtype, taskName, date, startTime, endTime",
-      });
-    }
-
-    // Check if user has access to the organization
-    const userOrg = await UserOrganization.findOne({
-      where: { userId, organizationId },
-    });
-
-    if (!userOrg) {
-      return res.status(403).json({
-        success: false,
-        message: "You don't have access to this organization",
+          "All required fields must be provided: organizationId, customerId, processId, activityId, workPlaceType, taskName, date, startTime, endTime",
       });
     }
 
@@ -132,7 +120,7 @@ router.post(
     // Determine work location address based on type
     let finalWorkLocationAddress = workLocationAddress;
     if (!finalWorkLocationAddress) {
-      switch (workLocationtype) {
+      switch (workPlaceType) {
         case "organization":
           finalWorkLocationAddress =
             organization.address || organization.workLocation;
@@ -154,7 +142,7 @@ router.post(
       customerId,
       processId,
       activityId,
-      workPlaceType: workLocationtype,
+      workPlaceType: workPlaceType,
       workPlaceAddress: finalWorkLocationAddress,
       taskName,
       description,

@@ -22,76 +22,20 @@ router.use(requireUser);
 router.get(
   "/",
   catchAsync(async (req, res) => {
-    const userId = req.user.id;
-
-    // Debug: Check if user exists and has organizations
-    const userOrganizations = await UserOrganization.findAll({
-      where: { userId },
-      include: [
-        {
-          model: Organization,
-          as: "organization",
-        },
-      ],
-    });
-
-    console.log(
-      `User ${userId} has ${userOrganizations.length} organization associations`
-    );
-
-    // If no user-organization associations, return all organizations (for debugging)
-    if (userOrganizations.length === 0) {
-      const allOrganizations = await Organization.findAll({
-        include: [
-          {
-            model: Customer,
-            as: "clients",
-            attributes: ["id", "name", "address", "workLocation"],
-          },
-        ],
-        order: [["name", "ASC"]],
-      });
-
-      console.log(
-        `Found ${allOrganizations.length} total organizations in database`
-      );
-
-      return res.json({
-        success: true,
-        data: {
-          organizations: allOrganizations,
-          debug: {
-            message:
-              "No user-organization associations found, returning all organizations",
-            userOrganizationCount: userOrganizations.length,
-            totalOrganizations: allOrganizations.length,
-          },
-        },
-      });
-    }
-
-    // Original query for users with proper associations
-    const organizations = await Organization.findAll({
+    // Removed user-organization association check
+    const allOrganizations = await Organization.findAll({
       include: [
         {
           model: User,
           as: "users",
-          where: { id: userId },
-          through: { attributes: [] }, // Don't include junction table data
-          attributes: [], // Don't include user data in response
-        },
-        {
-          model: Customer,
-          as: "clients",
-          attributes: ["id", "name", "address", "workLocation"],
+          through: { attributes: [] },
         },
       ],
-      order: [["name", "ASC"]],
     });
 
     res.json({
       success: true,
-      data: { organizations },
+      data: allOrganizations,
     });
   })
 );
@@ -126,7 +70,7 @@ router.get(
 
     res.json({
       success: true,
-      data: { organizations },
+      data: organizations, // Directly return the organizations array
     });
   })
 );

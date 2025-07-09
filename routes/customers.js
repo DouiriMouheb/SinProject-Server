@@ -22,7 +22,13 @@ router.use(requireUser); // Changed to user access
 router.get(
   "/",
   catchAsync(async (req, res) => {
-    const { page = 1, limit = 20, search = "", isActive = "true" } = req.query;
+    const {
+      page = 1,
+      limit = 20,
+      search = "",
+      isActive = "true",
+      organizationId,
+    } = req.query;
     const offset = (page - 1) * limit;
 
     const where = {};
@@ -31,6 +37,9 @@ router.get(
     }
     if (isActive !== "all") {
       where.isActive = isActive === "true";
+    }
+    if (organizationId) {
+      where.organizationId = organizationId;
     }
 
     const { count, rows: customers } = await Customer.findAndCountAll({
