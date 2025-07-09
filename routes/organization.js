@@ -3,6 +3,7 @@ const express = require("express");
 const { Organization, Customer, UserOrganization, User } = require("../models");
 const { authenticate } = require("../middleware/auth");
 const { requireUser, requireAdmin } = require("../middleware/rbac");
+const { validate, schemas } = require("../middleware/validation");
 const { catchAsync } = require("../middleware/errorHandler");
 const logger = require("../utils/logger");
 const { Op } = require("sequelize");
@@ -137,21 +138,9 @@ router.get(
  */
 router.get(
   "/:id",
+  validate(schemas.uuidParam, "params"),
   catchAsync(async (req, res) => {
     const { id } = req.params;
-    const userId = req.user.id;
-
-    // Check if user has access to this organization
-    const userOrg = await UserOrganization.findOne({
-      where: { userId, organizationId: id },
-    });
-
-    if (!userOrg) {
-      return res.status(403).json({
-        success: false,
-        message: "You don't have access to this organization",
-      });
-    }
 
     const organization = await Organization.findByPk(id, {
       include: [
@@ -193,22 +182,9 @@ router.get(
   "/:id/customers",
   catchAsync(async (req, res) => {
     const { id } = req.params;
-    const userId = req.user.id;
-
-    // Check if user has access to this organization
-    const userOrg = await UserOrganization.findOne({
-      where: { userId, organizationId: id },
-    });
-
-    if (!userOrg) {
-      return res.status(403).json({
-        success: false,
-        message: "You don't have access to this organization",
-      });
-    }
 
     const customers = await Customer.findAll({
-      where: { organizationId: id },
+      where: { organization_id: id },
       attributes: [
         "id",
         "name",
@@ -235,31 +211,124 @@ router.get(
 router.post(
   "/",
   requireAdmin,
+  validate(schemas.createOrganization),
   catchAsync(async (req, res) => {
-    const { name, address, workLocation } = req.body;
-
-    if (!name) {
-      return res.status(400).json({
-        success: false,
-        message: "Organization name is required",
-      });
-    }
+    const { name, workLocation, address } = req.body;
 
     const organization = await Organization.create({
       name,
-      address,
       workLocation,
+      address,
     });
 
-    logger.info(`Organization created: ${organization.name}`, {
-      adminUserId: req.user.id,
+    logger.info("Organization created", {
+      userId: req.user.id,
       organizationId: organization.id,
+      organizationName: organization.name,
     });
 
     res.status(201).json({
       success: true,
-      message: "Organization created successfully",
       data: { organization },
+      message: "Organization created successfully",
+    });
+  })
+);
+
+/**
+ * @route   PUT /api/organizations/:id
+ * @desc    Update an organization (Admin only)
+ * @access  Private (Admin)
+ */
+router.put(
+  "/:id",
+  requireAdmin,
+  validate(schemas.uuidParam, "params"),
+  validate(schemas.updateOrganization),
+  catchAsync(async (req, res) => {
+    const { id } = req.params;
+    const { name, workLocation, address } = req.body;
+
+    const organization = await Organization.findByPk(id);
+
+    if (!organization) {
+      return res.status(404).json({
+        success: false,
+        message: "Organization not found",
+      });
+    }
+
+    await organization.update({
+      name: name || organization.name,
+      workLocation:
+        workLocation !== undefined ? workLocation : organization.workLocation,
+      address: address !== undefined ? address : organization.address,
+    });
+
+    logger.info("Organization updated", {
+      userId: req.user.id,
+      organizationId: organization.id,
+      organizationName: organization.name,
+    });
+
+    res.json({
+      success: true,
+      data: { organization },
+      message: "Organization updated successfully",
+    });
+  })
+);
+
+/**
+ * @route   DELETE /api/organizations/:id
+ * @desc    Delete an organization (Admin only)
+ * @access  Private (Admin)
+ */
+router.delete(
+  "/:id",
+  requireAdmin,
+  validate(schemas.uuidParam, "params"),
+  catchAsync(async (req, res) => {
+    const { id } = req.params;
+
+    const organization = await Organization.findByPk(id);
+
+    if (!organization) {
+      return res.status(404).json({
+        success: false,
+        message: "Organization not found",
+      });
+    }
+
+    // Check if organization has customers
+    const customerCount = await Customer.count({
+      where: { organization_id: id },
+    });
+
+    if (customerCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Cannot delete organization with existing customers. Please remove all customers first.",
+      });
+    }
+
+    // Remove all user-organization associations
+    await UserOrganization.destroy({
+      where: { organizationId: id },
+    });
+
+    await organization.destroy();
+
+    logger.info("Organization deleted", {
+      userId: req.user.id,
+      organizationId: id,
+      organizationName: organization.name,
+    });
+
+    res.json({
+      success: true,
+      message: "Organization deleted successfully",
     });
   })
 );

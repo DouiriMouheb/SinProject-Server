@@ -144,6 +144,19 @@ const schemas = {
     isActive: Joi.boolean(),
   }).min(1),
 
+  // Organization schemas
+  createOrganization: Joi.object({
+    name: Joi.string().trim().min(2).max(200).required(),
+    workLocation: Joi.string().trim().max(255),
+    address: Joi.string().trim().max(500),
+  }),
+
+  updateOrganization: Joi.object({
+    name: Joi.string().trim().min(2).max(200),
+    workLocation: Joi.string().trim().max(255),
+    address: Joi.string().trim().max(500),
+  }).min(1),
+
   // UUID param validation
   uuidParam: Joi.object({
     id: commonFields.uuid.required(),
