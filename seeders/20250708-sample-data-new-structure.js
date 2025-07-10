@@ -6,7 +6,7 @@ const bcrypt = require("bcryptjs");
 module.exports = {
   async up(queryInterface, Sequelize) {
     // Create users first
-    const hashedPassword = await bcrypt.hash("password123", 10);
+    const hashedPassword = await bcrypt.hash("TNmouheb1&?", 10);
 
     const users = [
       {
