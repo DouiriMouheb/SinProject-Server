@@ -265,8 +265,8 @@ router.get(
       limit: parseInt(limit),
       offset: parseInt(offset),
       order: [
-        ["date", "DESC"],
-        ["startTime", "DESC"],
+        ["date", "ASC"],
+        ["startTime", "ASC"],
       ],
     });
 
